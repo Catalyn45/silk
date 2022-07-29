@@ -1,7 +1,10 @@
 #include "lexer.h"
+#include "string.h"
+#include "parser.h"
+#include "vm.h"
 #include <stdio.h>
 #include <stdlib.h>
-
+/*
 static void print_tok(const struct token_entry* token) {
     switch (token->token_code) {
         case TOK_INT:
@@ -36,22 +39,57 @@ static void print_tok(const struct token_entry* token) {
             break;
     }
 }
+*/
+/*
+static void print_node(const struct node* n) {
+    switch (n->type) {
+        case NODE_NUMBER:
+            printf("NODE_NUMBER\n");
+            break;
+        case NODE_BINARY_OP:
+            printf("NODE_BINARY_OP\n");
+            break;
+    }
+}
+static void print_ast(const struct node* ast, uint32_t indent) {
+    if (ast == NULL) {
+        return;
+    }
+    for (uint32_t i = 0; i < indent; i++) {
+        printf("\t");
+    }
 
-int main() {
+    print_node(ast);
+    print_ast(ast->left, indent + 1);
+    print_ast(ast->right, indent + 2);
+}
+*/
+int main(int argc, char* argv[]) {
+    (void)argc;
     struct token_entry* tokens = NULL;
     uint32_t n_tokens;
 
-    const char text[] = "(1 + 2) / 3 * 5 - 'alabala' + \"portocala\" = 3";
+    const char * text = argv[1];
 
-    int res = tokenize(text, sizeof(text) - 1, &tokens, &n_tokens);
+
+    int res = tokenize(text, strlen(text), &tokens, &n_tokens);
     if (res != 0) {
         // TODO: error
         return 1;
     }
-
+    /*
     for (uint32_t i = 0; i < n_tokens; i++) {
         print_tok(&tokens[i]);
     }
+    */
+    
+    struct node* ast = NULL;
+    parse(tokens, n_tokens, &ast);
+
+    // print_ast(ast, 0);
+
+    int result = evaluate(ast);
+    printf("%d\n", result);
 
     free(tokens);
     return 0;
