@@ -7,7 +7,7 @@ CXX=clang++
 CFLAGS=-fPIC -Os -Wall -Wextra -Werror -Winline -MD
 
 LIBS=
-TEST_LIBS=-lgtest -lgtest_main
+TEST_LIBS= -lgtest -lgtest_main
 
 C=$(shell find ./src -name "*.c")
 TEST_CPP=$(shell find ./test -name "*.cpp" 2> /dev/null)
@@ -37,7 +37,7 @@ $(TESTNAME): $(TEST_OBJ) $(filter-out obj/./src/main.o, $(OBJ))
 	@$(CXX) $(CFLAGS) -o $(TESTNAME) $^ $(LIBS) $(TEST_LIBS)
 	@echo -e "\033[0;35mTest done"
 
-all: $(PROJNAME) $(PROJNAME)_test
+all: $(PROJNAME) # $(PROJNAME)_test
 	@echo -e "\033[0;37mAll done"
 
 clean:
