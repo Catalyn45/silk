@@ -1,7 +1,6 @@
 #include "vm.h"
 #include "stdlib.h"
 
-
 int evaluate(struct node* ast) {
     if (ast == NULL) {
         return 0;

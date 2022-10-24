@@ -7,9 +7,28 @@
 #define advance() \
     ++(*current_index)
 
+static int expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root);
+
 static int factor(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     (void)n_tokens;
     const struct token_entry* current_token = get_token();
+
+    if (current_token->token_code == TOK_LPR) {
+        advance();
+        int result = expression(current_index, tokens, n_tokens, root);
+        if (result != 0) {
+            return result;
+        }
+
+        current_token = get_token();
+        if (current_token->token_code != TOK_RPR) {
+            return 1;
+        }
+
+        advance();
+        return 0;
+    }
+
     if (current_token->token_code != TOK_INT) {
         // TODO: handle
         return 1;

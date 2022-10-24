@@ -1,0 +1,11 @@
+expression: expression + expression |
+            expression - expression |
+            term
+
+term:       term * term    |
+            term / term    |
+            factor
+
+factor:     INT            |
+            ( expression ) |
+

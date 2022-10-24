@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "utils.h"
 #include "string.h"
 #include "parser.h"
 #include "vm.h"
@@ -82,14 +83,17 @@ int main(int argc, char* argv[]) {
         print_tok(&tokens[i]);
     }
     */
-    
+
     struct node* ast = NULL;
     parse(tokens, n_tokens, &ast);
 
     // print_ast(ast, 0);
 
     int result = evaluate(ast);
-    printf("%d\n", result);
+    printf("result: %d\n", result);
+
+    puts("ast:");
+    dump_ast(ast, 0);
 
     free(tokens);
     return 0;
