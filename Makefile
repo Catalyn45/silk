@@ -1,4 +1,4 @@
-PROJNAME=silk
+PROJNAME=sylk
 TESTNAME=$(PROJNAME)_test
 
 CC=clang

@@ -1,4 +1,4 @@
-# silk
+# sylk
 
 Simple interpreter of arithmetic expressions, a programming
 language in the future.
@@ -9,4 +9,4 @@ Just use `make`. The project have no dependencies.
 
 ## Running
 
-`./silk "2 * (3 + 1) - 2"`
+`./sylk "2 * (3 + 1) - 2"`
