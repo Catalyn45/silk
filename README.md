@@ -8,5 +8,5 @@ Just use `make`. The project have no dependencies.
 
 ## Running
 
-`./sylk examples/fibonaci.slk`
+`./sylk examples/fibonacci.slk`
 
