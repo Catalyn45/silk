@@ -21,7 +21,13 @@ enum token {
     TOK_IF,  // if
     TOK_ELS, // else
     TOK_WHL, // while
-    TOK_IDN  // identifier
+    TOK_IDN, // identifier
+    TOK_LES,
+    TOK_LEQ,
+    TOK_GRE,
+    TOK_GRQ,
+    TOK_DEQ,
+    TOK_NOT
 };
 
 struct token_entry {

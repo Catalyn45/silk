@@ -162,7 +162,12 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 ADD_TOKEN(TOK_MUL);
                 break;
             case '=':
-                ADD_TOKEN(TOK_EQL);
+                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                    ADD_TOKEN(TOK_DEQ);
+                    ++current_index;
+                } else {
+                    ADD_TOKEN(TOK_EQL);
+                }
                 break;
             case '(':
                 ADD_TOKEN(TOK_LPR);
@@ -175,6 +180,25 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 break;
             case '}':
                 ADD_TOKEN(TOK_RBR);
+                break;
+            case '<':
+                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                    ADD_TOKEN(TOK_LEQ);
+                    ++current_index;
+                } else {
+                    ADD_TOKEN(TOK_LES);
+                }
+                break;
+            case '>':
+                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                    ADD_TOKEN(TOK_GRQ);
+                    ++current_index;
+                } else {
+                    ADD_TOKEN(TOK_GRE);
+                }
+                break;
+            case '!':
+                ADD_TOKEN(TOK_NOT);
                 break;
             default:
                 if (current_character >= '0' && current_character <= '9') {

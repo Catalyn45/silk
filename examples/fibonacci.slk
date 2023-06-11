@@ -3,16 +3,16 @@ n_fibonaci = 10
 a = 0
 b = 1
 
-if n_fibonaci {
-    while n_fibonaci - 1 {
-        aux = b
-        b = a + b
-        a = aux
-
-        n_fibonaci = n_fibonaci - 1
-    }
-} else {
+if !n_fibonaci {
     b = 0
+}
+
+while n_fibonaci - 1 {
+    aux = b
+    b = a + b
+    a = aux
+
+    n_fibonaci = n_fibonaci - 1
 }
 
 print(b)

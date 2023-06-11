@@ -43,6 +43,17 @@ int evaluate(struct node* ast) {
                     return evaluate(ast->left) * evaluate(ast->right);
                 case TOK_DIV:
                     return evaluate(ast->left) / evaluate(ast->right);
+                case TOK_LES:
+                    return evaluate(ast->left) < evaluate(ast->right);
+                case TOK_LEQ:
+                    return evaluate(ast->left) <= evaluate(ast->right);
+                case TOK_GRE:
+                    return evaluate(ast->left) > evaluate(ast->right);
+                case TOK_GRQ:
+                    return evaluate(ast->left) >= evaluate(ast->right);
+                case TOK_DEQ:
+                    return evaluate(ast->left) == evaluate(ast->right);
+
                 default:
                     return 0;
             }
@@ -97,6 +108,10 @@ int evaluate(struct node* ast) {
                 printf("%d\n", parameter);
 
                 return 0;
+            }
+        case NODE_NOT:
+            {
+                return !evaluate(ast->value);
             }
         default:
             return 0;

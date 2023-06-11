@@ -14,6 +14,24 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
 static int factor(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     const struct token_entry* current_token = get_token();
 
+    if (current_token->token_code == TOK_NOT) {
+        advance();
+
+        struct node* not_node = node_new(NODE_NOT, NULL, NULL, NULL, NULL);
+        if (!not_node) {
+            return 1;
+        }
+
+        int result = expression(current_index, tokens, n_tokens, &not_node->value);
+        if (result != 0) {
+            return result;
+        }
+
+        *root = not_node;
+
+        return 0;
+    }
+
     if (current_token->token_code == TOK_LPR) {
         advance();
         int result = expression(current_index, tokens, n_tokens, root);
@@ -90,7 +108,15 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
     }
 
     const struct token_entry* current_token = get_token();
-    while (current_token->token_code == TOK_ADD || current_token->token_code == TOK_MIN) {
+    while (
+        current_token->token_code == TOK_ADD  ||
+        current_token->token_code == TOK_MIN  ||
+        current_token->token_code == TOK_LES  ||
+        current_token->token_code == TOK_LEQ  ||
+        current_token->token_code == TOK_GRE  ||
+        current_token->token_code == TOK_GRQ  ||
+        current_token->token_code == TOK_DEQ
+    ) {
         advance();
         struct node* right = NULL;
         result = term(current_index, tokens, n_tokens, &right);
@@ -289,9 +315,10 @@ static int parse_statement(uint32_t* current_index, const struct token_entry* to
     }
 
     if (current_token_code == TOK_IDN) {
-        if ((*current_index) + 1 < n_tokens && tokens[(*current_index) + 1].token_code == TOK_EQL) {
+        if (tokens[(*current_index) + 1].token_code == TOK_EQL) {
             return parse_assignment(current_index, tokens, n_tokens, root);
-        } else if((*current_index) + 1 < n_tokens && tokens[(*current_index) + 1].token_code == TOK_LPR) {
+
+        } else if (tokens[(*current_index) + 1].token_code == TOK_LPR) {
             return parse_function_call(current_index, tokens, n_tokens, root);
         }
     }

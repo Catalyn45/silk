@@ -16,7 +16,12 @@ static const char* rev_tokens[] = {
     "]",         // TOK_RSQ, // right square parantesis (])
     "{",         // TOK_LBR, // left bracket ({)
     "}",         // TOK_RBR, // right bracket (})
-    [17] = "identifier" // TOK_IDN, // variables
+    [18] = "<",
+    "<=",
+    ">",
+    "<=",
+    "==",
+    "!"
 };
 
 static const char* rev_node[] = {
@@ -27,7 +32,8 @@ static const char* rev_node[] = {
     "ASSIGN",
     "STATEMENT",
     "VARIABLE",
-    "FUNCTION_CALL"
+    "FUNCTION_CALL",
+    "NOT"
 };
 
 void dump_ast(struct node* root, int indent) {
@@ -40,17 +46,17 @@ void dump_ast(struct node* root, int indent) {
     if (indent > 0)
         printf("└── ");
 
-    printf("%s(", rev_node[root->type]);
+    printf("%s", rev_node[root->type]);
 
     if (root->type == NODE_NUMBER) {
-        printf("%d", *(int*)root->token->token_value);
+        printf("(%d)\n", *(int*)root->token->token_value);
     } else if (root->type == NODE_ASSIGN || root->type == NODE_VAR || root->type == NODE_FUNCTION_CALL) {
-        printf("%s", (char*)root->token->token_value);
+        printf("(%s)\n", (char*)root->token->token_value);
     } else if (root->token) {
-        printf("%s", rev_tokens[root->token->token_code]);
+        printf("(%s)\n", rev_tokens[root->token->token_code]);
+    } else {
+        printf("\n");
     }
-
-    printf(")\n");
 
     if (root->type == NODE_STATEMENT) {
         dump_ast(root->value, indent+4);
