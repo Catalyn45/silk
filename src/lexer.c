@@ -1,7 +1,8 @@
 #include "lexer.h"
 #include <stdio.h>
-
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define CHUNK_SIZE 40
 
@@ -38,33 +39,83 @@ static int tokenize_string(uint32_t* current_index, const char* text, uint32_t t
         return 1;
     }
 
-    uint32_t allocated = CHUNK_SIZE;
     uint32_t value_index = 0;
 
-    while ( *current_index < text_size && text[*current_index] != start_quote ) {
-        if (value_index >= allocated) {
-            char* new_mem = realloc(value, allocated + CHUNK_SIZE);
-            if (new_mem == NULL) {
-                // TODO: error
-                return 1;
-            }
-
-            value = new_mem;
-            allocated += CHUNK_SIZE;
-        }
-
+    while (*current_index < text_size && text[*current_index] != start_quote) {
         value[value_index++] = text[(*current_index)++];
     }
 
     if ( *current_index == text_size || text[*current_index] != start_quote) {
         // TODO: error
         return 1;
-    } else {
-        ++(*current_index);
     }
+
+    ++(*current_index);
+    value[value_index++] = '\0';
+
 
     (*tokens)[(*n_tokens)++] = (struct token_entry) {
         .token_code = TOK_STR,
+        .token_value = value
+    };
+
+    return 0;
+}
+
+static bool is_iden_first(char character) {
+    if (
+        (character >= 'a' && character <= 'z') ||
+        (character >= 'A' && character <= 'Z') ||
+        character == '_'
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+static bool is_iden(char character) {
+    return is_iden_first(character) || (character >= '0' && character <= '9');
+}
+
+int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry** tokens, uint32_t* n_tokens) {
+    char* value = malloc(CHUNK_SIZE);
+    if (value == NULL) {
+        // TODO: error
+        return 1;
+    }
+
+    uint32_t value_index = 0;
+
+    while (*current_index < text_size && is_iden(text[*current_index])) {
+        value[value_index++] = text[(*current_index)++];
+    }
+
+    value[value_index++] = '\0';
+
+    if (strcmp(value, "if") == 0) {
+        (*tokens)[(*n_tokens)++] = (struct token_entry) {
+            .token_code = TOK_IF,
+        };
+        return 0;
+    }
+
+    if (strcmp(value, "else") == 0) {
+        (*tokens)[(*n_tokens)++] = (struct token_entry) {
+            .token_code = TOK_ELS,
+        };
+        return 0;
+    }
+
+    if (strcmp(value, "while") == 0) {
+        (*tokens)[(*n_tokens)++] = (struct token_entry) {
+            .token_code = TOK_WHL,
+        };
+        return 0;
+    }
+
+    (*tokens)[(*n_tokens)++] = (struct token_entry) {
+        .token_code = TOK_IDN,
         .token_value = value
     };
 
@@ -80,7 +131,6 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
         return 1;
     }
 
-    uint32_t allocated = CHUNK_SIZE;
     uint32_t n_tokens = 0;
 
 #define ADD_TOKEN(code)       \
@@ -90,18 +140,15 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
     ++current_index;
 
     while ( current_index < text_size ) {
-        if (n_tokens >= allocated) {
-            struct token_entry* new_mem = realloc(tokens, allocated + CHUNK_SIZE);
-            if (new_mem == NULL) {
-                // TODO: error
-                return 1;
-            }
-
-            tokens = new_mem;
-            allocated += CHUNK_SIZE;
-        }
+        char current_character = text[current_index];
 
         switch(text[current_index]) {
+            case ' ':
+            case '\n':
+            case '\r':
+            case '\t':
+                ++current_index;
+                break;
             case '+':
                 ADD_TOKEN(TOK_ADD);
                 break;
@@ -123,21 +170,35 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
             case ')':
                 ADD_TOKEN(TOK_RPR);
                 break;
+            case '{':
+                ADD_TOKEN(TOK_LBR);
+                break;
+            case '}':
+                ADD_TOKEN(TOK_RBR);
+                break;
             default:
-                if (text[current_index] >= '0' && text[current_index] <= '9') {
+                if (current_character >= '0' && current_character <= '9') {
                     int res = tokenize_int(&current_index, text, text_size, &tokens, &n_tokens);
                     if ( res != 0 ) {
                         // TODO: error
                         return 1;
                     }
-                } else if (text[current_index] == '\"' || text[current_index] == '\'') {
+                } else if (current_character == '\"' || current_character == '\'') {
                     int res = tokenize_string(&current_index, text, text_size, &tokens, &n_tokens);
                     if ( res != 0) {
                         // TODO: error
                         return 1;
                     }
-                } else if ( text[current_index] == ' ' || text[current_index] == '\t' ) {
-                    ++current_index;
+                }
+                else if (is_iden_first(current_character)) {
+                    int res = tokenize_identifier(&current_index, text, text_size, &tokens, &n_tokens);
+                    if ( res != 0 ) {
+                        // TODO: error
+                        return 1;
+                    }
+                } else {
+                    printf("invalid token: %c\n", current_character);
+                    goto free_tokens;
                 }
         }
     }
@@ -150,4 +211,9 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
     *out_n_tokens = n_tokens;
 
     return 0;
+
+free_tokens:
+    free(tokens);
+
+    return 1;
 }

@@ -17,7 +17,11 @@ enum token {
     TOK_RSQ, // right square parantesis (])
     TOK_LBR, // left bracket ({)
     TOK_RBR, // right bracket (})
-    TOK_EOF  // end of file
+    TOK_EOF, // end of file
+    TOK_IF,  // if
+    TOK_ELS, // else
+    TOK_WHL, // while
+    TOK_IDN  // identifier
 };
 
 struct token_entry {

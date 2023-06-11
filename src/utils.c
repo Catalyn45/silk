@@ -1,23 +1,34 @@
 #include <stdio.h>
+#include "parser.h"
 #include "utils.h"
 
 static const char* rev_tokens[] = {
-    "int", // TOK_INT, // integer (20)
-    "str", // TOK_STR, // string ("example")
-    "+", // TOK_ADD, // add operator (+)
-    "-", // TOK_MIN, // minux operator (-)
-    "*", // TOK_MUL, // multiply operator (*)
-    "/", // TOK_DIV, // division operator (/)
-    "=", // TOK_EQL, // equal (=)
-    "(", // TOK_LPR, // left parantesis (()
-    ")", // TOK_RPR, // right parantesis ())
-    "[", // TOK_LSQ, // left square parantesis ([)
-    "]", // TOK_RSQ, // right square parantesis (])
-    "{", // TOK_LBR, // left bracket ({)
-    "}", // TOK_RBR, // right bracket (})
-    "EOF" // TOK_EOF  // end of file
+    "int",       // TOK_INT, // integer (20)
+    "str",       // TOK_STR, // string ("example")
+    "+",         // TOK_ADD, // add operator (+)
+    "-",         // TOK_MIN, // minux operator (-)
+    "*",         // TOK_MUL, // multiply operator (*)
+    "/",         // TOK_DIV, // division operator (/)
+    "=",         // TOK_EQL, // equal (=)
+    "(",         // TOK_LPR, // left parantesis (()
+    ")",         // TOK_RPR, // right parantesis ())
+    "[",         // TOK_LSQ, // left square parantesis ([)
+    "]",         // TOK_RSQ, // right square parantesis (])
+    "{",         // TOK_LBR, // left bracket ({)
+    "}",         // TOK_RBR, // right bracket (})
+    [17] = "identifier" // TOK_IDN, // variables
 };
 
+static const char* rev_node[] = {
+    "NUMBER",
+    "BINARY_OP",
+    "IF",
+    "WHILE",
+    "ASSIGN",
+    "STATEMENT",
+    "VARIABLE",
+    "FUNCTION_CALL"
+};
 
 void dump_ast(struct node* root, int indent) {
     if (!root)
@@ -29,11 +40,25 @@ void dump_ast(struct node* root, int indent) {
     if (indent > 0)
         printf("└── ");
 
-    if (root->type == NODE_NUMBER)
-        printf("%d\n", *(int*)root->token->token_value);
-    else
-        printf("%s\n", rev_tokens[root->token->token_code]);
+    printf("%s(", rev_node[root->type]);
 
+    if (root->type == NODE_NUMBER) {
+        printf("%d", *(int*)root->token->token_value);
+    } else if (root->type == NODE_ASSIGN || root->type == NODE_VAR || root->type == NODE_FUNCTION_CALL) {
+        printf("%s", (char*)root->token->token_value);
+    } else if (root->token) {
+        printf("%s", rev_tokens[root->token->token_code]);
+    }
+
+    printf(")\n");
+
+    if (root->type == NODE_STATEMENT) {
+        dump_ast(root->value, indent+4);
+        dump_ast(root->left, indent);
+        return;
+    }
+
+    dump_ast(root->value, indent+4);
     dump_ast(root->left, indent+4);
     dump_ast(root->right, indent+4);
 }
