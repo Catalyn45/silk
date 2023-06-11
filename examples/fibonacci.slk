@@ -7,7 +7,7 @@ if !n_fibonaci {
     b = 0
 }
 
-while n_fibonaci - 1 {
+while n_fibonaci > 1 {
     aux = b
     b = a + b
     a = aux

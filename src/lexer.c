@@ -97,27 +97,32 @@ int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text
         (*tokens)[(*n_tokens)++] = (struct token_entry) {
             .token_code = TOK_IF,
         };
-        return 0;
+        goto keyword;
     }
 
     if (strcmp(value, "else") == 0) {
         (*tokens)[(*n_tokens)++] = (struct token_entry) {
             .token_code = TOK_ELS,
         };
-        return 0;
+        goto keyword;
     }
 
     if (strcmp(value, "while") == 0) {
         (*tokens)[(*n_tokens)++] = (struct token_entry) {
             .token_code = TOK_WHL,
         };
-        return 0;
+        goto keyword;
     }
 
     (*tokens)[(*n_tokens)++] = (struct token_entry) {
         .token_code = TOK_IDN,
         .token_value = value
     };
+
+    return 0;
+
+keyword:
+    free(value);
 
     return 0;
 }
