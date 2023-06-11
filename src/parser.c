@@ -74,7 +74,15 @@ static int term(uint32_t* current_index, const struct token_entry* tokens, uint3
     }
 
     const struct token_entry* current_token = get_token();
-    while (current_token->token_code == TOK_MUL || current_token->token_code == TOK_DIV) {
+    while (
+        current_token->token_code == TOK_MUL  ||
+        current_token->token_code == TOK_DIV  ||
+        current_token->token_code == TOK_LES  ||
+        current_token->token_code == TOK_LEQ  ||
+        current_token->token_code == TOK_GRE  ||
+        current_token->token_code == TOK_GRQ  ||
+        current_token->token_code == TOK_DEQ
+    ) {
         advance();
         struct node* right = NULL;
         result = factor(current_index, tokens, n_tokens, &right);
@@ -111,11 +119,8 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
     while (
         current_token->token_code == TOK_ADD  ||
         current_token->token_code == TOK_MIN  ||
-        current_token->token_code == TOK_LES  ||
-        current_token->token_code == TOK_LEQ  ||
-        current_token->token_code == TOK_GRE  ||
-        current_token->token_code == TOK_GRQ  ||
-        current_token->token_code == TOK_DEQ
+        current_token->token_code == TOK_AND  ||
+        current_token->token_code == TOK_OR
     ) {
         advance();
         struct node* right = NULL;

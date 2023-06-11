@@ -200,6 +200,22 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
             case '!':
                 ADD_TOKEN(TOK_NOT);
                 break;
+            case '&':
+                if (current_index + 1 < text_size && text[current_index + 1] == '&') {
+                    ADD_TOKEN(TOK_AND);
+                    ++current_index;
+                } else {
+                    return 1;
+                }
+                break;
+            case '|':
+                if (current_index + 1 < text_size && text[current_index + 1] == '|') {
+                    ADD_TOKEN(TOK_OR);
+                    ++current_index;
+                } else {
+                    return 1;
+                }
+                break;
             default:
                 if (current_character >= '0' && current_character <= '9') {
                     int res = tokenize_int(&current_index, text, text_size, &tokens, &n_tokens);

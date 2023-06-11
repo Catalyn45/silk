@@ -27,7 +27,9 @@ enum token {
     TOK_GRE,
     TOK_GRQ,
     TOK_DEQ,
-    TOK_NOT
+    TOK_NOT,
+    TOK_AND,
+    TOK_OR
 };
 
 struct token_entry {
