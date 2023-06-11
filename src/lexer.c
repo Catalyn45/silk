@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CHUNK_SIZE 40
+#define CHUNK_SIZE 512
 
 static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry** tokens, uint32_t* n_tokens) {
     int final_number = 0;

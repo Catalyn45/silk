@@ -59,8 +59,8 @@ int evaluate(struct node* ast) {
             }
         case NODE_WHILE:
             {
-                int result = evaluate(ast->value);
-                while (result) {
+                int result = 0;
+                while (evaluate(ast->value)) {
                     result = evaluate(ast->left);
                 }
 

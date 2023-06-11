@@ -8,6 +8,7 @@
 
 int main(int argc, char* argv[]) {
     (void)argc;
+
     struct token_entry* tokens = NULL;
     uint32_t n_tokens;
 
