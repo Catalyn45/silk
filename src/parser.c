@@ -245,21 +245,27 @@ static int parse_assignment(uint32_t* current_index, const struct token_entry* t
     const struct token_entry* current_token = get_token();
     advance();
 
-    struct node* assignment_value = NULL;
 
     if (tokens[*current_index].token_code != TOK_EQL) {
         // TODO: handle
         return 1;
     }
 
+    struct node* var_node = node_new(NODE_VAR, current_token, NULL, NULL, NULL);
+    if (!var_node) {
+        // TODO: handle
+        return 1;
+    }
+
     advance();
+    struct node* assignment_value = NULL;
     int res = expression(current_index, tokens, n_tokens, &assignment_value)    ;
     if (res != 0) {
         // TODO: handle
         return 1;
     }
 
-    struct node* assignment_node = node_new(NODE_ASSIGN, current_token, assignment_value, NULL, NULL);
+    struct node* assignment_node = node_new(NODE_ASSIGN, NULL, var_node, assignment_value, NULL);
     if (!assignment_node) {
         // TODO: handle
         return 1;

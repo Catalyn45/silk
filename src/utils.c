@@ -50,10 +50,12 @@ void dump_ast(struct node* root, int indent) {
 
     if (root->type == NODE_NUMBER) {
         printf("(%d)\n", *(int*)root->token->token_value);
-    } else if (root->type == NODE_ASSIGN || root->type == NODE_VAR || root->type == NODE_FUNCTION_CALL) {
-        printf("(%s)\n", (char*)root->token->token_value);
     } else if (root->token) {
-        printf("(%s)\n", rev_tokens[root->token->token_code]);
+        if (root->token->token_value) {
+            printf("(%s)\n", (char*)root->token->token_value);
+        } else {
+            printf("(%s)\n", rev_tokens[root->token->token_code]);
+        }
     } else {
         printf("\n");
     }

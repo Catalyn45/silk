@@ -84,16 +84,18 @@ int evaluate(struct node* ast) {
             }
         case NODE_ASSIGN:
             {
-                struct var* v = var_from_mem(ast->token->token_value);
+                const char* var_name = ast->value->token->token_value;
+
+                struct var* v = var_from_mem(var_name);
                 if (v == NULL) {
                     memory[used_mem++] = (struct var) {
-                        .name = ast->token->token_value,
-                        .value = evaluate(ast->value)
+                        .name = var_name,
+                        .value = evaluate(ast->left)
                     };
                     return 0;
                 }
 
-                v->value = evaluate(ast->value);
+                v->value = evaluate(ast->left);
                 return v->value;
 
             }
