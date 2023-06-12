@@ -45,7 +45,7 @@ int evaluate(struct node* ast) {
                 case TOK_DIV:
                     return evaluate(ast->left) / evaluate(ast->right);
                 case TOK_LES:
-                    return evaluate(ast->left)< evaluate(ast->right);
+                    return evaluate(ast->left) < evaluate(ast->right);
                 case TOK_LEQ:
                     return evaluate(ast->left) <= evaluate(ast->right);
                 case TOK_GRE:
@@ -54,6 +54,8 @@ int evaluate(struct node* ast) {
                     return evaluate(ast->left) >= evaluate(ast->right);
                 case TOK_DEQ:
                     return evaluate(ast->left) == evaluate(ast->right);
+                case TOK_NEQ:
+                    return evaluate(ast->left) != evaluate(ast->right);
                 case TOK_AND:
                     return evaluate(ast->left) && evaluate(ast->right);
                 case TOK_OR:

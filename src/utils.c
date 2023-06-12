@@ -21,6 +21,7 @@ static const char* rev_tokens[] = {
     ">",
     "<=",
     "==",
+    "!=",
     "!"
 };
 

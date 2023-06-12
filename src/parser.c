@@ -81,7 +81,8 @@ static int term(uint32_t* current_index, const struct token_entry* tokens, uint3
         current_token->token_code == TOK_LEQ  ||
         current_token->token_code == TOK_GRE  ||
         current_token->token_code == TOK_GRQ  ||
-        current_token->token_code == TOK_DEQ
+        current_token->token_code == TOK_DEQ  ||
+        current_token->token_code == TOK_NEQ
     ) {
         advance();
         struct node* right = NULL;
