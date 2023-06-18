@@ -5,15 +5,15 @@
 #include "ast.h"
 
 enum node_type {
-    NODE_NUMBER,
-    NODE_BINARY_OP,
-    NODE_IF,
-    NODE_WHILE,
-    NODE_ASSIGN,
-    NODE_STATEMENT,
-    NODE_VAR,
-    NODE_FUNCTION_CALL,
-    NODE_NOT
+    NODE_NUMBER = 0,
+    NODE_BINARY_OP = 1,
+    NODE_IF = 2,
+    NODE_WHILE = 3,
+    NODE_ASSIGN = 4,
+    NODE_STATEMENT = 5,
+    NODE_VAR = 6,
+    NODE_FUNCTION_CALL = 7,
+    NODE_NOT = 8
 };
 
 int parse (const struct token_entry* tokens, uint32_t n_tokens, struct node** root);

@@ -1,13 +1,15 @@
 #include "parser.h"
 #include "lexer.h"
 #include "ast.h"
+#include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define get_token() \
-    &tokens[*current_index]
+    (&tokens[*current_index])
 
 #define advance() \
-    ++(*current_index)
+    (++(*current_index))
 
 static int expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root);
 
@@ -138,7 +140,6 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
         }
 
         left = bin_op;
-
         current_token = get_token();
     }
 
@@ -147,7 +148,7 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
     return 0;
 }
 
-static int parse_statements(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root);
+static int parse_statements(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root, bool brackets);
 
 static int parse_if(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     struct node* true_side = NULL;
@@ -156,44 +157,19 @@ static int parse_if(uint32_t* current_index, const struct token_entry* tokens, u
 
     struct node* value = NULL;
     int res = expression(current_index, tokens, n_tokens, &value);
-    if (tokens[*current_index].token_code != TOK_LBR) {
-        // TODO: handle
-        return 1;
-    }
 
-    advance();
-    res = parse_statements(current_index, tokens, n_tokens, &true_side);
+    res = parse_statements(current_index, tokens, n_tokens, &true_side, true);
     if (res != 0) {
         return res;
     }
 
-    if (tokens[*current_index].token_code != TOK_RBR) {
-        // TODO: handle
-        return 1;
-    }
-
     struct node* false_side = NULL;
-
-    advance();
     if (tokens[*current_index].token_code == TOK_ELS) {
-
         advance();
-        if (tokens[*current_index].token_code != TOK_LBR) {
-            // TODO: handle
-            return 1;
-        }
-
-        advance();
-        int res = parse_statements(current_index, tokens, n_tokens, &false_side);
+        int res = parse_statements(current_index, tokens, n_tokens, &false_side, true);
         if (res != 0) {
             return res;
         }
-
-        if (tokens[*current_index].token_code != TOK_RBR) {
-            // TODO: handle
-            return 1;
-        }
-        advance();
     }
 
     struct node* if_node = node_new(NODE_IF, NULL, value, true_side, false_side);
@@ -214,23 +190,16 @@ static int parse_while(uint32_t* current_index, const struct token_entry* tokens
 
     struct node* value = NULL;
     int res = expression(current_index, tokens, n_tokens, &value);
-    if (tokens[*current_index].token_code != TOK_LBR) {
+    if (res != 0) {
         // TODO: handle
-        return 1;
+        return res;
     }
 
-    advance();
-    res = parse_statements(current_index, tokens, n_tokens, &true_side);
+    res = parse_statements(current_index, tokens, n_tokens, &true_side, true);
     if (res != 0) {
         return res;
     }
 
-    if (tokens[*current_index].token_code != TOK_RBR) {
-        // TODO: handle
-        return 1;
-    }
-
-    advance();
     struct node* while_node = node_new(NODE_WHILE, NULL, value, true_side, NULL);
     if (!while_node) {
         // TODO: handle
@@ -246,8 +215,7 @@ static int parse_assignment(uint32_t* current_index, const struct token_entry* t
     const struct token_entry* current_token = get_token();
     advance();
 
-
-    if (tokens[*current_index].token_code != TOK_EQL) {
+    if (get_token()->token_code != TOK_EQL) {
         // TODO: handle
         return 1;
     }
@@ -335,14 +303,22 @@ static int parse_statement(uint32_t* current_index, const struct token_entry* to
         }
     }
 
-    if (current_token_code == TOK_LPR || current_token_code == TOK_INT || current_token_code == TOK_IDN) {
-        return expression(current_index, tokens, n_tokens, root);
-    }
-
-    return 1;
+    return expression(current_index, tokens, n_tokens, root);
 }
 
-static int parse_statements(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root ) {
+static int parse_statements(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root, bool brackets) {
+    const struct token_entry* current_token = get_token();
+
+    if (brackets) {
+        if (current_token->token_code != TOK_LBR) {
+            // TODO: handle
+            return 1;
+        }
+
+        // eat bracket
+        advance();
+    }
+
     struct node* first_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, NULL);
     if (!first_statement) {
         //TODO: handle
@@ -351,7 +327,12 @@ static int parse_statements(uint32_t* current_index, const struct token_entry* t
 
     struct node* statement = first_statement;
 
-    while (parse_statement(current_index, tokens, n_tokens, &statement->value) == 0){
+    while (current_token->token_code != TOK_RBR && current_token->token_code != TOK_EOF) {
+        if (parse_statement(current_index, tokens, n_tokens, &statement->value) != 0) {
+            //TODO: handle
+            return 1;
+        }
+
         struct node* new_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, NULL);
         if (!new_statement) {
             //TODO: handle
@@ -360,14 +341,27 @@ static int parse_statements(uint32_t* current_index, const struct token_entry* t
 
         statement->left = new_statement;
         statement = new_statement;
+        current_token = get_token();
+    }
+
+    if (brackets) {
+        if (current_token->token_code != TOK_RBR) {
+            // TODO: handle
+            return 1;
+        }
+
+        // eat bracket
+        advance();
+    } else if (current_token->token_code != TOK_EOF) {
+        // TODO: handle
+        return 1;
     }
 
     *root = first_statement;
-
     return 0;
 }
 
 int parse(const struct token_entry* tokens, uint32_t n_tokens, struct node** root ) {
     uint32_t current_index = 0;
-    return parse_statements(&current_index, tokens, n_tokens, root);
+    return parse_statements(&current_index, tokens, n_tokens, root, false);
 }

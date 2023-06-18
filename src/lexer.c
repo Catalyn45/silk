@@ -24,7 +24,7 @@ static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text
 
     (*tokens)[(*n_tokens)++] = (struct token_entry) {
         .token_code = TOK_INT,
-        .token_value = token_value
+        .token_value = token_value,
     };
 
     return 0;
@@ -129,6 +129,8 @@ keyword:
 
 int tokenize(const char* text, uint32_t text_size, struct token_entry** out_tokens, uint32_t* out_n_tokens) {
     uint32_t current_index = 0;
+    int line = 0;
+    int column = 0;
 
     struct token_entry* tokens = malloc(CHUNK_SIZE * sizeof(*tokens));
     if (tokens == NULL) {
@@ -140,16 +142,22 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
 
 #define ADD_TOKEN(code)       \
     tokens[n_tokens++] = (struct token_entry) {           \
-        .token_code = code    \
+        .token_code = code,    \
+        .line = line, \
+        .column = column, \
+        .index = current_index \
     }; \
-    ++current_index;
+    ++current_index; \
+    ++column;
 
     while ( current_index < text_size ) {
         char current_character = text[current_index];
 
         switch(text[current_index]) {
-            case ' ':
             case '\n':
+                line += 1;
+                column = 0;
+            case ' ':
             case '\r':
             case '\t':
                 ++current_index;
