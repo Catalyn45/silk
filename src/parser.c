@@ -299,11 +299,14 @@ static int parse_function_call(uint32_t* current_index, const struct token_entry
     // eat left par
     advance();
 
-    struct node* function_parameter;
-    int res = parse_expression(current_index, tokens, n_tokens, &function_parameter);
-    if (res != 0) {
-        ERROR("failed to parse expression");
-        return 1;
+    current_token = get_token();
+    struct node* function_parameter = NULL;
+    if (current_token->code != TOK_RPR) {
+        int res = parse_expression(current_index, tokens, n_tokens, &function_parameter);
+        if (res != 0) {
+            ERROR("failed to parse expression");
+            return 1;
+        }
     }
 
     current_token = get_token();
@@ -326,7 +329,6 @@ static int parse_function_call(uint32_t* current_index, const struct token_entry
 }
 
 static int parse_argument_list(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
-    (void) tokens;
     (void) n_tokens;
     (void) root;
 
@@ -336,9 +338,35 @@ static int parse_argument_list(uint32_t* current_index, const struct token_entry
         return 1;
     }
 
-    while (current_token->code == TOK_COM ) {
-
+    struct node* argument_list = node_new(NODE_VAR, NULL, NULL, NULL);
+    if (!argument_list) {
+        ERROR("failed allocating memory");
+        return 1;
     }
+
+    struct node* var = argument_list;
+
+    do {
+
+        // eat left par or comma
+        advance();
+
+        current_token = get_token();
+        if (current_token->code == TOK_IDN) {
+            var->token = current_token;
+            var->right = node_new(NODE_VAR, NULL, NULL, NULL);
+            if (!var->right) {
+                ERROR("failed allocating memory");
+                return 1;
+            }
+
+            var = var->right;
+
+            // eat identifier
+            advance();
+        }
+
+    } while (current_token->code == TOK_COM );
 
     current_token = get_token();
     if (current_token->code != TOK_RPR) {
@@ -346,6 +374,10 @@ static int parse_argument_list(uint32_t* current_index, const struct token_entry
         return 1;
     }
 
+    // eat right par
+    advance();
+
+    *root = argument_list;
     return 0;
 }
 
@@ -353,9 +385,9 @@ static int parse_function(uint32_t* current_index, const struct token_entry* tok
     // eat def keyword
     advance();
 
-    const struct token_entry* current_token = get_token();
-    if (current_token->code != TOK_IDN) {
-        EXPECTED_TOKEN(TOK_IDN, current_token->code);
+    const struct token_entry* function_name = get_token();
+    if (function_name->code != TOK_IDN) {
+        EXPECTED_TOKEN(TOK_IDN, function_name->code);
         return 1;
     }
 
@@ -365,7 +397,7 @@ static int parse_function(uint32_t* current_index, const struct token_entry* tok
     struct node* arguments;
     int res = parse_argument_list(current_index, tokens, n_tokens, &arguments);
     if (res != 0) {
-        ERROR("memory allocation failed");
+        ERROR("failed to parse argument list");
         return res;
     }
 
@@ -376,7 +408,7 @@ static int parse_function(uint32_t* current_index, const struct token_entry* tok
         return res;
     }
 
-    struct node* function = node_new(NODE_FUNCTION, current_token, arguments, body);
+    struct node* function = node_new(NODE_FUNCTION, function_name, arguments, body);
     if (!function) {
         ERROR("memory allocating failed");
         return 1;

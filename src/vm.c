@@ -8,6 +8,7 @@
 struct var {
     const char* name;
     int value;
+    void* ref;
 };
 
 struct var memory[1024] = {};
@@ -109,18 +110,32 @@ int evaluate(struct node* ast) {
             {
                 const char* function_name = ast->token->value;
 
-                if (strcmp(function_name, "print") != 0) {
-                    return 1;
+                if (strcmp(function_name, "print") == 0) {
+                    int parameter = evaluate(ast->left);
+                    printf("%d\n", parameter);
+
+                    return 0;
                 }
 
-                int parameter = evaluate(ast->left);
-                printf("%d\n", parameter);
+                struct var* v = var_from_mem(function_name);
+                struct node* function_node = v->ref;
 
-                return 0;
+                return evaluate(function_node->right);
+
             }
         case NODE_NOT:
             {
                 return !evaluate(ast->left);
+            }
+        case NODE_FUNCTION:
+            {
+                const char* fun_name = ast->token->value;
+                memory[used_mem++] = (struct var) {
+                    .name = fun_name,
+                    .ref = (void*)ast
+                };
+
+                return 0;
             }
         default:
             return 0;
