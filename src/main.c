@@ -38,27 +38,37 @@ int main(int argc, char* argv[]) {
     uint32_t n_tokens;
     int res = tokenize(text, strlen(text), &tokens, &n_tokens);
     if (res != 0) {
-        // TODO: error
-        return 1;
+        ERROR("failed to tokenize");
+        goto free_tokens;
     }
 
     struct node* ast = NULL;
-    parse(tokens, n_tokens, &ast);
+    res = parse(text, tokens, n_tokens, &ast);
+    if (res != 0) {
+        ERROR("failed to parse");
+        goto free_nodes;
+    }
 
     if (print_ast) {
         puts("ast:");
-        dump_ast(ast, 0);
+        dump_ast(ast, 0, false);
     }
 
     if (execute) {
         evaluate(ast);
     }
 
-    for (uint32_t i = 0; i < n_tokens; ++i) {
-        free(tokens[i].token_value);
-    }
-    free(tokens);
-    node_free(ast);
 
-    return 0;
+free_tokens:
+    for (uint32_t i = 0; i < n_tokens; ++i) {
+        free(tokens[i].value);
+    }
+
+    free(tokens);
+
+free_nodes:
+    if (ast)
+        node_free(ast);
+
+    return res;
 }

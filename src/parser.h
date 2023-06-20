@@ -13,9 +13,11 @@ enum node_type {
     NODE_STATEMENT = 5,
     NODE_VAR = 6,
     NODE_FUNCTION_CALL = 7,
-    NODE_NOT = 8
+    NODE_NOT = 8,
+    NODE_FUNCTION = 9,
+    NODE_DECISION = 10
 };
 
-int parse (const struct token_entry* tokens, uint32_t n_tokens, struct node** root);
+int parse(const char* text, const struct token_entry* tokens, uint32_t n_tokens, struct node** root );
 
 #endif

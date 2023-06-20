@@ -1,9 +1,11 @@
-#include "parser.h"
-#include "lexer.h"
-#include "ast.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "parser.h"
+#include "lexer.h"
+#include "ast.h"
+#include "utils.h"
 
 #define get_token() \
     (&tokens[*current_index])
@@ -16,17 +18,21 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
 static int factor(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     const struct token_entry* current_token = get_token();
 
-    if (current_token->token_code == TOK_NOT) {
+    if (current_token->code == TOK_NOT) {
+        // eat ! keyword
         advance();
 
-        struct node* not_node = node_new(NODE_NOT, NULL, NULL, NULL, NULL);
-        if (!not_node) {
-            return 1;
+        struct node* not_expression;
+        int result = expression(current_index, tokens, n_tokens, &not_expression);
+        if (result != 0) {
+            ERROR("failed to parse expression");
+            return result;
         }
 
-        int result = expression(current_index, tokens, n_tokens, &not_node->value);
-        if (result != 0) {
-            return result;
+        struct node* not_node = node_new(NODE_NOT, NULL, not_expression, NULL);
+        if (!not_node) {
+            ERROR("memory allocation failed");
+            return 1;
         }
 
         *root = not_node;
@@ -34,32 +40,39 @@ static int factor(uint32_t* current_index, const struct token_entry* tokens, uin
         return 0;
     }
 
-    if (current_token->token_code == TOK_LPR) {
+    if (current_token->code == TOK_LPR) {
+        // eat left par
         advance();
+
         int result = expression(current_index, tokens, n_tokens, root);
         if (result != 0) {
+            ERROR("failed to parse expression");
             return result;
         }
 
         current_token = get_token();
-        if (current_token->token_code != TOK_RPR) {
+        if (current_token->code != TOK_RPR) {
+            EXPECTED_TOKEN(TOK_RPR, current_token->code);
             return 1;
         }
 
+        // eat right par
         advance();
         return 0;
     }
 
-    if (current_token->token_code != TOK_INT && current_token->token_code != TOK_IDN) {
-        // TODO: handle
+    if (current_token->code != TOK_INT && current_token->code != TOK_IDN) {
+        ERROR("expected token code: int or identifier, got token: %s", rev_tokens[current_token->code]);
         return 1;
     }
 
-    struct node* node_num = node_new(current_token->token_code == TOK_INT ? NODE_NUMBER : NODE_VAR, current_token, NULL, NULL, NULL);
+    struct node* node_num = node_new(current_token->code == TOK_INT ? NODE_NUMBER : NODE_VAR, current_token, NULL, NULL);
     if (!node_num) {
+        ERROR("memory allocation failed");
         return 1;
     }
 
+    // eat current token
     advance();
 
     *root = node_num;
@@ -68,40 +81,41 @@ static int factor(uint32_t* current_index, const struct token_entry* tokens, uin
 }
 
 static int term(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
-    struct node* left = NULL;
+    struct node* left;
     int result = factor(current_index, tokens, n_tokens, &left);
     if ( result != 0 ) {
-        // TODO: handle
+        ERROR("failed to parse factor");
         return 1;
     }
 
     const struct token_entry* current_token = get_token();
     while (
-        current_token->token_code == TOK_MUL  ||
-        current_token->token_code == TOK_DIV  ||
-        current_token->token_code == TOK_LES  ||
-        current_token->token_code == TOK_LEQ  ||
-        current_token->token_code == TOK_GRE  ||
-        current_token->token_code == TOK_GRQ  ||
-        current_token->token_code == TOK_DEQ  ||
-        current_token->token_code == TOK_NEQ
+        current_token->code == TOK_MUL  ||
+        current_token->code == TOK_DIV  ||
+        current_token->code == TOK_LES  ||
+        current_token->code == TOK_LEQ  ||
+        current_token->code == TOK_GRE  ||
+        current_token->code == TOK_GRQ  ||
+        current_token->code == TOK_DEQ  ||
+        current_token->code == TOK_NEQ
     ) {
+        // eat current token
         advance();
-        struct node* right = NULL;
+
+        struct node* right;
         result = factor(current_index, tokens, n_tokens, &right);
         if ( result != 0 ) {
-            // TODO: handle
+            ERROR("failed to parse factor");
             return 1;
         }
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, NULL, left, right);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         if (!bin_op) {
-            // TODO: handle
+            ERROR("memory allocation failed");
             return 1;
         }
 
         left = bin_op;
-
         current_token = get_token();
     }
 
@@ -111,31 +125,32 @@ static int term(uint32_t* current_index, const struct token_entry* tokens, uint3
 }
 
 static int expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
-    struct node* left = NULL;
+    struct node* left;
     int result = term(current_index, tokens, n_tokens, &left);
     if ( result != 0 ) {
-        // TODO: handle
+        ERROR("failed to parse term");
         return 1;
     }
 
     const struct token_entry* current_token = get_token();
     while (
-        current_token->token_code == TOK_ADD  ||
-        current_token->token_code == TOK_MIN  ||
-        current_token->token_code == TOK_AND  ||
-        current_token->token_code == TOK_OR
+        current_token->code == TOK_ADD  ||
+        current_token->code == TOK_MIN  ||
+        current_token->code == TOK_AND  ||
+        current_token->code == TOK_OR
     ) {
+        // eat current token
         advance();
-        struct node* right = NULL;
+        struct node* right;
         result = term(current_index, tokens, n_tokens, &right);
         if ( result != 0 ) {
-            // TODO: handle
+            ERROR("failed to parse term");
             return 1;
         }
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, NULL, left, right);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         if (!bin_op) {
-            // TODO: handle
+            ERROR("memory allocation failed");
             return 1;
         }
 
@@ -151,58 +166,78 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
 static int parse_statements(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root, bool brackets);
 
 static int parse_if(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
-    struct node* true_side = NULL;
-
+    // eat if keyword
     advance();
 
-    struct node* value = NULL;
-    int res = expression(current_index, tokens, n_tokens, &value);
+    struct node* if_expression;
+    int res = expression(current_index, tokens, n_tokens, &if_expression);
+    if (res != 0) {
+        ERROR("failed to parse expression");
+        return res;
+    }
 
+    struct node* true_side;
     res = parse_statements(current_index, tokens, n_tokens, &true_side, true);
     if (res != 0) {
+        ERROR("failed to parse statements");
         return res;
     }
 
     struct node* false_side = NULL;
-    if (tokens[*current_index].token_code == TOK_ELS) {
+    const struct token_entry* current_token = get_token();
+    if (current_token->code == TOK_ELS) {
+        // eat else keyword
         advance();
         int res = parse_statements(current_index, tokens, n_tokens, &false_side, true);
         if (res != 0) {
+            ERROR("failed to parse statements");
             return res;
         }
     }
 
-    struct node* if_node = node_new(NODE_IF, NULL, value, true_side, false_side);
+    struct node* decision = node_new(NODE_DECISION, NULL, true_side, false_side);
+    if (!decision) {
+        ERROR("failed allocating memory");
+        return 1;
+    }
+
+    struct node* if_node = node_new(NODE_IF, NULL, if_expression, decision);
     if (!if_node) {
-        // TODO: handle
+        ERROR("memory allocation failed");
         return 1;
     }
 
     *root = if_node;
-
     return 0;
 }
 
 static int parse_while(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
-    struct node* true_side = NULL;
-
+    // eat while keyword
     advance();
 
-    struct node* value = NULL;
-    int res = expression(current_index, tokens, n_tokens, &value);
+    struct node* while_expression;
+    int res = expression(current_index, tokens, n_tokens, &while_expression);
     if (res != 0) {
-        // TODO: handle
+        ERROR("failed to parse expression");
         return res;
     }
 
+    struct node* true_side;
     res = parse_statements(current_index, tokens, n_tokens, &true_side, true);
     if (res != 0) {
+        ERROR("failed to parse statements");
         return res;
     }
 
-    struct node* while_node = node_new(NODE_WHILE, NULL, value, true_side, NULL);
+    struct node* decision = node_new(NODE_DECISION, NULL, true_side, NULL);
+    if (!decision) {
+        ERROR("failed allocating memory");
+        return 1;
+    }
+
+    struct node* while_node = node_new(NODE_WHILE, NULL, while_expression, decision);
     if (!while_node) {
-        // TODO: handle
+        ERROR("memory allocation failed");
         return 1;
     }
 
@@ -212,31 +247,36 @@ static int parse_while(uint32_t* current_index, const struct token_entry* tokens
 }
 
 static int parse_assignment(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+    const struct token_entry* variable_token = get_token();
+
+    // eat variable name
+    advance();
+
     const struct token_entry* current_token = get_token();
-    advance();
-
-    if (get_token()->token_code != TOK_EQL) {
-        // TODO: handle
+    if (current_token->code != TOK_EQL) {
+        EXPECTED_TOKEN(TOK_EQL, current_token->code);
         return 1;
     }
 
-    struct node* var_node = node_new(NODE_VAR, current_token, NULL, NULL, NULL);
+    // eat equals
+    advance();
+
+    struct node* var_node = node_new(NODE_VAR, variable_token, NULL, NULL);
     if (!var_node) {
-        // TODO: handle
+        ERROR("memory allocation failed");
         return 1;
     }
 
-    advance();
-    struct node* assignment_value = NULL;
+    struct node* assignment_value;
     int res = expression(current_index, tokens, n_tokens, &assignment_value)    ;
     if (res != 0) {
-        // TODO: handle
+        ERROR("failed to parse expression");
         return 1;
     }
 
-    struct node* assignment_node = node_new(NODE_ASSIGN, NULL, var_node, assignment_value, NULL);
+    struct node* assignment_node = node_new(NODE_ASSIGN, NULL, var_node, assignment_value);
     if (!assignment_node) {
-        // TODO: handle
+        ERROR("memory allocation failed");
         return 1;
     }
 
@@ -245,115 +285,213 @@ static int parse_assignment(uint32_t* current_index, const struct token_entry* t
 }
 
 static int parse_function_call(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+    const struct token_entry* function_name = get_token();
+
+    // eat function name
+    advance();
+
     const struct token_entry* current_token = get_token();
-    advance();
-
-    struct node* function_value = NULL;
-
-    if (tokens[*current_index].token_code != TOK_LPR) {
-        // TODO: handle
+    if (current_token->code != TOK_LPR) {
+        EXPECTED_TOKEN(TOK_LPR, current_token->code);
         return 1;
     }
 
+    // eat left par
     advance();
-    int res = expression(current_index, tokens, n_tokens, &function_value);
+
+    struct node* function_parameter;
+    int res = expression(current_index, tokens, n_tokens, &function_parameter);
     if (res != 0) {
-        // TODO: handle
+        ERROR("failed to parse expression");
         return 1;
     }
 
-    if (tokens[*current_index].token_code != TOK_RPR) {
-        // TODO: handle
+    current_token = get_token();
+    if (current_token->code != TOK_RPR) {
+        EXPECTED_TOKEN(TOK_RPR, current_token->code);
         return 1;
     }
+
+    // eat right par
     advance();
 
-    struct node* function_node = node_new(NODE_FUNCTION_CALL, current_token, function_value, NULL, NULL);
+    struct node* function_node = node_new(NODE_FUNCTION_CALL, function_name, function_parameter, NULL);
     if (!function_node) {
-        // TODO: handle
+        ERROR("memory allocation failed");
         return 1;
     }
 
     *root = function_node;
+    return 0;
+}
+
+static int parse_argument_list(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+    (void) tokens;
+    (void) n_tokens;
+    (void) root;
+
+    const struct token_entry* current_token = get_token();
+    if (current_token->code != TOK_LPR) {
+        EXPECTED_TOKEN(TOK_LPR, current_token->code);
+        return 1;
+    }
+
+    while (current_token->code == TOK_COM ) {
+
+    }
+
+    current_token = get_token();
+    if (current_token->code != TOK_RPR) {
+        EXPECTED_TOKEN(TOK_RPR, current_token->code);
+        return 1;
+    }
 
     return 0;
 }
 
-static int parse_statement(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
-    int current_token_code = tokens[*current_index].token_code;
+static int parse_function(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+    // eat def keyword
+    advance();
 
-    if (current_token_code == TOK_EOF) {
+    const struct token_entry* current_token = get_token();
+    if (current_token->code != TOK_IDN) {
+        EXPECTED_TOKEN(TOK_IDN, current_token->code);
         return 1;
     }
 
+    // eat function name
+    advance();
+
+    struct node* arguments;
+    int res = parse_argument_list(current_index, tokens, n_tokens, &arguments);
+    if (res != 0) {
+        ERROR("memory allocation failed");
+        return res;
+    }
+
+    struct node* body;
+    res = parse_statements(current_index, tokens, n_tokens, &body, true);
+    if (res != 0) {
+        ERROR("failed to parse statements");
+        return res;
+    }
+
+    struct node* function = node_new(NODE_FUNCTION, current_token, arguments, body);
+    if (!function) {
+        ERROR("memory allocating failed");
+        return 1;
+    }
+
+    *root = function;
+    return 0;
+}
+
+static int parse_statement(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+    int current_token_code = get_token()->code;
+
+    int res;
     if (current_token_code == TOK_IF) {
-        return parse_if(current_index, tokens, n_tokens, root);
+        res = parse_if(current_index, tokens, n_tokens, root);
+        if (res != 0) {
+            ERROR("failed to parse if");
+        }
+
+        return res;
     }
 
     if (current_token_code == TOK_WHL) {
-        return parse_while(current_index, tokens, n_tokens, root);
+        res = parse_while(current_index, tokens, n_tokens, root);
+        if (res != 0) {
+            ERROR("failed to parse while");
+        }
+
+        return res;
+    }
+
+    if (current_token_code == TOK_FUN) {
+        res = parse_function(current_index, tokens, n_tokens, root);
+        if (res != 0) {
+            ERROR("failed to parse function");
+        }
+
+        return res;
     }
 
     if (current_token_code == TOK_IDN) {
-        if (tokens[(*current_index) + 1].token_code == TOK_EQL) {
-            return parse_assignment(current_index, tokens, n_tokens, root);
+        if (tokens[(*current_index) + 1].code == TOK_EQL) {
+            res = parse_assignment(current_index, tokens, n_tokens, root);
+            if (res != 0) {
+                ERROR("failed to parse assignment");
+            }
 
-        } else if (tokens[(*current_index) + 1].token_code == TOK_LPR) {
-            return parse_function_call(current_index, tokens, n_tokens, root);
+            return res;
+
+        } else if (tokens[(*current_index) + 1].code == TOK_LPR) {
+            res = parse_function_call(current_index, tokens, n_tokens, root);
+            if (res != 0) {
+                ERROR("failed to parse function call");
+            }
+
+            return res;
         }
     }
 
-    return expression(current_index, tokens, n_tokens, root);
+    res = expression(current_index, tokens, n_tokens, root);
+    if (res != 0) {
+        ERROR("failed to parse expression");
+    }
+
+    return res;
 }
 
 static int parse_statements(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root, bool brackets) {
     const struct token_entry* current_token = get_token();
 
     if (brackets) {
-        if (current_token->token_code != TOK_LBR) {
-            // TODO: handle
+        if (current_token->code != TOK_LBR) {
+            EXPECTED_TOKEN(TOK_LBR, current_token->code);
             return 1;
         }
 
-        // eat bracket
+        // eat left bracket
         advance();
     }
 
-    struct node* first_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, NULL);
+    struct node* first_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL);
     if (!first_statement) {
-        //TODO: handle
+        ERROR("Error allocating memory");
         return 1;
     }
 
     struct node* statement = first_statement;
 
-    while (current_token->token_code != TOK_RBR && current_token->token_code != TOK_EOF) {
-        if (parse_statement(current_index, tokens, n_tokens, &statement->value) != 0) {
-            //TODO: handle
+    while (current_token->code != TOK_RBR && current_token->code != TOK_EOF) {
+        if (parse_statement(current_index, tokens, n_tokens, &statement->left) != 0) {
+            ERROR("failed to parse statement");
             return 1;
         }
 
-        struct node* new_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, NULL);
+        struct node* new_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL);
         if (!new_statement) {
-            //TODO: handle
+            ERROR("Error allocating memory");
             return 1;
         }
 
-        statement->left = new_statement;
+        statement->right = new_statement;
         statement = new_statement;
         current_token = get_token();
     }
 
     if (brackets) {
-        if (current_token->token_code != TOK_RBR) {
-            // TODO: handle
+        if (current_token->code != TOK_RBR) {
+            EXPECTED_TOKEN(TOK_RBR, current_token->code);
             return 1;
         }
 
-        // eat bracket
+        // eat right bracket
         advance();
-    } else if (current_token->token_code != TOK_EOF) {
-        // TODO: handle
+    } else if (current_token->code != TOK_EOF) {
+        EXPECTED_TOKEN(TOK_EOF, current_token->code);
         return 1;
     }
 
@@ -361,7 +499,14 @@ static int parse_statements(uint32_t* current_index, const struct token_entry* t
     return 0;
 }
 
-int parse(const struct token_entry* tokens, uint32_t n_tokens, struct node** root ) {
+int parse(const char* text, const struct token_entry* tokens, uint32_t n_tokens, struct node** root ) {
     uint32_t current_index = 0;
-    return parse_statements(&current_index, tokens, n_tokens, root, false);
+    int res = parse_statements(&current_index, tokens, n_tokens, root, false);
+    if (res != 0) {
+        const struct token_entry* token = &tokens[current_index];
+        ERROR("at line %d", token->line);
+        print_program_error(text, token->index);
+    }
+
+    return res;
 }

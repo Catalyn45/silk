@@ -30,14 +30,15 @@ enum token {
     TOK_NEQ = 23,
     TOK_NOT = 24,
     TOK_AND = 25,
-    TOK_OR =  26
+    TOK_OR =  26,
+    TOK_COM = 27,
+    TOK_FUN = 28
 };
 
 struct token_entry {
-    int token_code;     // token enum
-    void* token_value;  // associated value ( for integer and string ) otherwise NULL
+    int code;     // token enum
+    void* value;  // associated value ( for integer and string ) otherwise NULL
     int line;           // line from text
-    int column;         // column from text
     int index;          // index from text
 };
 

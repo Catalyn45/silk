@@ -30,12 +30,12 @@ int evaluate(struct node* ast) {
 
     switch (ast->type) {
         case NODE_NUMBER:
-            return *((int*)ast->token->token_value);
+            return *((int*)ast->token->value);
         case NODE_VAR:
-            return var_from_mem(ast->token->token_value)->value;
+            return var_from_mem(ast->token->value)->value;
 
         case NODE_BINARY_OP:
-            switch (ast->token->token_code) {
+            switch (ast->token->code) {
                 case TOK_ADD:
                     return evaluate(ast->left) + evaluate(ast->right);
                 case TOK_MIN:
@@ -66,61 +66,61 @@ int evaluate(struct node* ast) {
             }
         case NODE_IF:
             {
-                int result = evaluate(ast->value);
+                int result = evaluate(ast->left);
                 if (result) {
-                    return evaluate(ast->left);
+                    return evaluate(ast->right->left);
                 }
 
-                if (ast->right) {
-                    return evaluate(ast->right);
+                if (ast->right->right) {
+                    return evaluate(ast->right->right);
                 }
             }
         case NODE_WHILE:
             {
                 int result = 0;
-                while (evaluate(ast->value)) {
-                    result = evaluate(ast->left);
+                while (evaluate(ast->left)) {
+                    result = evaluate(ast->right->left);
                 }
 
                 return result;
             }
         case NODE_ASSIGN:
             {
-                const char* var_name = ast->value->token->token_value;
+                const char* var_name = ast->left->token->value;
 
                 struct var* v = var_from_mem(var_name);
                 if (v == NULL) {
                     memory[used_mem++] = (struct var) {
                         .name = var_name,
-                        .value = evaluate(ast->left)
+                        .value = evaluate(ast->right)
                     };
                     return 0;
                 }
 
-                v->value = evaluate(ast->left);
+                v->value = evaluate(ast->right);
                 return v->value;
 
             }
         case NODE_STATEMENT:
             {
-                return evaluate(ast->value) + evaluate(ast->left);
+                return evaluate(ast->left) + evaluate(ast->right);
             }
         case NODE_FUNCTION_CALL:
             {
-                const char* function_name = ast->token->token_value;
+                const char* function_name = ast->token->value;
 
                 if (strcmp(function_name, "print") != 0) {
                     return 1;
                 }
 
-                int parameter = evaluate(ast->value);
+                int parameter = evaluate(ast->left);
                 printf("%d\n", parameter);
 
                 return 0;
             }
         case NODE_NOT:
             {
-                return !evaluate(ast->value);
+                return !evaluate(ast->left);
             }
         default:
             return 0;
