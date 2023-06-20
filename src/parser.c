@@ -13,9 +13,9 @@
 #define advance() \
     (++(*current_index))
 
-static int expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root);
+static int parse_expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root);
 
-static int factor(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+static int parse_factor(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     const struct token_entry* current_token = get_token();
 
     if (current_token->code == TOK_NOT) {
@@ -23,7 +23,7 @@ static int factor(uint32_t* current_index, const struct token_entry* tokens, uin
         advance();
 
         struct node* not_expression;
-        int result = expression(current_index, tokens, n_tokens, &not_expression);
+        int result = parse_expression(current_index, tokens, n_tokens, &not_expression);
         if (result != 0) {
             ERROR("failed to parse expression");
             return result;
@@ -44,7 +44,7 @@ static int factor(uint32_t* current_index, const struct token_entry* tokens, uin
         // eat left par
         advance();
 
-        int result = expression(current_index, tokens, n_tokens, root);
+        int result = parse_expression(current_index, tokens, n_tokens, root);
         if (result != 0) {
             ERROR("failed to parse expression");
             return result;
@@ -80,9 +80,9 @@ static int factor(uint32_t* current_index, const struct token_entry* tokens, uin
     return 0;
 }
 
-static int term(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+static int parse_term(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     struct node* left;
-    int result = factor(current_index, tokens, n_tokens, &left);
+    int result = parse_factor(current_index, tokens, n_tokens, &left);
     if ( result != 0 ) {
         ERROR("failed to parse factor");
         return 1;
@@ -103,7 +103,7 @@ static int term(uint32_t* current_index, const struct token_entry* tokens, uint3
         advance();
 
         struct node* right;
-        result = factor(current_index, tokens, n_tokens, &right);
+        result = parse_factor(current_index, tokens, n_tokens, &right);
         if ( result != 0 ) {
             ERROR("failed to parse factor");
             return 1;
@@ -124,9 +124,9 @@ static int term(uint32_t* current_index, const struct token_entry* tokens, uint3
     return 0;
 }
 
-static int expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
+static int parse_expression(uint32_t* current_index, const struct token_entry* tokens, uint32_t n_tokens, struct node** root) {
     struct node* left;
-    int result = term(current_index, tokens, n_tokens, &left);
+    int result = parse_term(current_index, tokens, n_tokens, &left);
     if ( result != 0 ) {
         ERROR("failed to parse term");
         return 1;
@@ -142,7 +142,7 @@ static int expression(uint32_t* current_index, const struct token_entry* tokens,
         // eat current token
         advance();
         struct node* right;
-        result = term(current_index, tokens, n_tokens, &right);
+        result = parse_term(current_index, tokens, n_tokens, &right);
         if ( result != 0 ) {
             ERROR("failed to parse term");
             return 1;
@@ -170,7 +170,7 @@ static int parse_if(uint32_t* current_index, const struct token_entry* tokens, u
     advance();
 
     struct node* if_expression;
-    int res = expression(current_index, tokens, n_tokens, &if_expression);
+    int res = parse_expression(current_index, tokens, n_tokens, &if_expression);
     if (res != 0) {
         ERROR("failed to parse expression");
         return res;
@@ -216,7 +216,7 @@ static int parse_while(uint32_t* current_index, const struct token_entry* tokens
     advance();
 
     struct node* while_expression;
-    int res = expression(current_index, tokens, n_tokens, &while_expression);
+    int res = parse_expression(current_index, tokens, n_tokens, &while_expression);
     if (res != 0) {
         ERROR("failed to parse expression");
         return res;
@@ -268,7 +268,7 @@ static int parse_assignment(uint32_t* current_index, const struct token_entry* t
     }
 
     struct node* assignment_value;
-    int res = expression(current_index, tokens, n_tokens, &assignment_value)    ;
+    int res = parse_expression(current_index, tokens, n_tokens, &assignment_value)    ;
     if (res != 0) {
         ERROR("failed to parse expression");
         return 1;
@@ -300,7 +300,7 @@ static int parse_function_call(uint32_t* current_index, const struct token_entry
     advance();
 
     struct node* function_parameter;
-    int res = expression(current_index, tokens, n_tokens, &function_parameter);
+    int res = parse_expression(current_index, tokens, n_tokens, &function_parameter);
     if (res != 0) {
         ERROR("failed to parse expression");
         return 1;
@@ -436,7 +436,7 @@ static int parse_statement(uint32_t* current_index, const struct token_entry* to
         }
     }
 
-    res = expression(current_index, tokens, n_tokens, root);
+    res = parse_expression(current_index, tokens, n_tokens, root);
     if (res != 0) {
         ERROR("failed to parse expression");
     }
