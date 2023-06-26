@@ -18,6 +18,16 @@ enum node_type {
     NODE_DECISION = 10
 };
 
-int parse(const char* text, const struct token_entry* tokens, uint32_t n_tokens, struct node** root );
+struct parser {
+    const char* text;
+    uint32_t current_index;
+
+    const struct token_entry*  tokens;
+    uint32_t n_tokens;
+
+    uint32_t current_scope;
+};
+
+int parse(struct parser* parser, struct node** root );
 
 #endif

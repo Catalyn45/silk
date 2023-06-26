@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     }
 
     bool print_ast = argc > 2 && strcmp(argv[2], "-a") == 0;
-    bool execute = argc <= 3 || strcmp(argv[3], "-h") != 0;
+    bool execute_program = argc <= 3 || strcmp(argv[3], "-h") != 0;
 
     char text[2048];
     size_t size = fread(text, sizeof(char), sizeof(text), f);
@@ -42,8 +42,14 @@ int main(int argc, char* argv[]) {
         goto free_tokens;
     }
 
+    struct parser parser = {
+        .text = text,
+        .tokens = tokens,
+        .n_tokens = n_tokens
+    };
     struct node* ast = NULL;
-    res = parse(text, tokens, n_tokens, &ast);
+
+    res = parse(&parser, &ast);
     if (res != 0) {
         ERROR("failed to parse");
         goto free_nodes;
@@ -54,8 +60,24 @@ int main(int argc, char* argv[]) {
         dump_ast(ast, 0, false);
     }
 
-    if (execute) {
-        evaluate(ast);
+    if (execute_program) {
+        uint8_t bytes[2048];
+        size_t n_bytes = 0;
+
+        if (evaluate(ast, bytes, &n_bytes, NULL) != 0) {
+            ERROR("failed to evaluate")
+            return 1;
+        }
+
+        struct vm vm = {
+            .bytes = bytes,
+            .n_bytes = n_bytes,
+        };
+
+        if (execute(&vm) != 0) {
+            ERROR("failed to execute");
+            return 1;
+        }
     }
 
 
