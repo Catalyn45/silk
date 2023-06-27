@@ -17,7 +17,7 @@ struct vm {
     bool halt;
 };
 
-int evaluate(struct node* ast, uint8_t* bytes, size_t* n_bytes, uint32_t* current_stack_size);
+int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* current_stack_size);
 
 int execute(struct vm* vm);
 

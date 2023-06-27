@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
 
     if (execute_program) {
         uint8_t bytes[2048];
-        size_t n_bytes = 0;
+        uint32_t n_bytes = 0;
 
         if (evaluate(ast, bytes, &n_bytes, NULL) != 0) {
             ERROR("failed to evaluate")
