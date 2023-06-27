@@ -7,18 +7,9 @@
 #include <string.h>
 #include <sys/types.h>
 
-struct var {
-    const char* name;
-    void* value;
-    uint32_t scope;
-};
-
-struct var variable_table[1024];
-uint32_t n_table = 0;
-
-static int get_variable(const char* name, uint32_t* index) {
-    for (uint32_t i = 0; i < n_table; ++i) {
-        if (strcmp(name, variable_table[i].name) == 0) {
+static int get_variable(const char* name, struct evaluator* e, uint32_t* index) {
+    for (uint32_t i = 0; i < e->n_locals; ++i) {
+        if (strcmp(name, e->locals[i].name) == 0) {
             *index = i;
             return 0;
         }
@@ -27,42 +18,45 @@ static int get_variable(const char* name, uint32_t* index) {
     return 1;
 }
 
-static void add_variable(const char* var_name, uint32_t scope, uint32_t* current_stack_size) {
-    while (*current_stack_size > 0 && variable_table[*current_stack_size - 1].scope > scope) {
-        --*current_stack_size;
+static void add_variable(const char* var_name, uint32_t scope, struct evaluator* e) {
+    while (e->n_locals > 0 && e->locals[e->n_locals - 1].scope > scope) {
+        --(e->n_locals);
     }
 
-    variable_table[n_table++] = (struct var) {
+    e->locals[e->n_locals++] = (struct var) {
         .name = var_name,
         .scope = scope
     };
+}
 
-    ++*current_stack_size;
+static uint32_t scope_push_count(struct evaluator* e, uint32_t scope) {
+    uint32_t count = 0;
+    uint32_t n = e->n_locals;
+
+    while (n > 0 && e->locals[n - 1].scope > scope) {
+        count += 1;
+        --n;
+    }
+
+    return count;
 }
 
 enum instructions {
     PUSH,
     POP,
-
     ADD,
     MIN,
     MUL,
     DIV,
-
     NOT,
-
     DEQ,
     NEQ,
-
     GRE,
     GRQ,
-
     LES,
     LEQ,
-
     AND,
     OR,
-
     DUP,
     PRINT,
     CHANGE,
@@ -81,14 +75,9 @@ enum instructions {
     (*n_bytes) += sizeof(num); \
 }
 
-int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* current_stack_size) {
+int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluator* e) {
     if (ast == NULL) {
         return 0;
-    }
-
-    uint32_t stack_s = 0;
-    if (current_stack_size == NULL) {
-        current_stack_size = &stack_s;
     }
 
     switch (ast->type) {
@@ -104,7 +93,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
             {
                 uint32_t position;
 
-                int res = get_variable(ast->token->value, &position);
+                int res = get_variable(ast->token->value, e, &position);
                 if (res != 0) {
                     return 1;
                 }
@@ -118,85 +107,85 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
         case NODE_BINARY_OP:
             switch (ast->token->code) {
                 case TOK_ADD:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(ADD);
                     return 0;
 
                 case TOK_MIN:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(MIN);
                     return 0;
 
                 case TOK_MUL:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(MUL);
                     return 0;
 
                 case TOK_DIV:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(DIV);
                     return 0;
 
                 case TOK_LES:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(LES);
                     return 0;
 
                 case TOK_LEQ:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(LEQ);
                     return 0;
 
                 case TOK_GRE:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(GRE);
                     return 0;
 
                 case TOK_GRQ:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(GRQ);
                     return 0;
 
                 case TOK_DEQ:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(DEQ);
                     return 0;
 
                 case TOK_NEQ:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(NEQ);
                     return 0;
 
                 case TOK_AND:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(AND);
                     return 0;
 
                 case TOK_OR:
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(OR);
                     return 0;
@@ -208,14 +197,17 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
         case NODE_IF:
             {
                 // statements
-                evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                evaluate(ast->left, bytes, n_bytes, e);
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_true_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_true_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, current_stack_size);
+                evaluate(ast->right->left, bytes, n_bytes, e);
+
+                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
+                    add_instruction(POP);
 
                 uint32_t placeholder_false_index;
                 if (ast->right->right) {
@@ -228,7 +220,10 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
                 memcpy(&bytes[placeholder_true_index], n_bytes, sizeof(*n_bytes));
 
                 // false
-                evaluate(ast->right->right, bytes, n_bytes, current_stack_size);
+                evaluate(ast->right->right, bytes, n_bytes, e);
+
+                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
+                    add_instruction(POP);
 
                 if (ast->right->right) {
                     memcpy(&bytes[placeholder_false_index], n_bytes, sizeof(*n_bytes));
@@ -242,14 +237,17 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
                 uint32_t start_index = *n_bytes;
 
                 // statements
-                evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                evaluate(ast->left, bytes, n_bytes, e);
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_false_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_false_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, current_stack_size);
+                evaluate(ast->right->left, bytes, n_bytes, e);
+
+                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
+                    add_instruction(POP);
 
                 add_instruction(JMP);
                 add_number(start_index);
@@ -265,15 +263,15 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
                 const char* var_name = ast->left->token->value;
 
                 uint32_t position;
-                int res = get_variable(var_name, &position);
+                int res = get_variable(var_name, e, &position);
                 if (res != 0) {
-                    evaluate(ast->right, bytes, n_bytes, current_stack_size);
-                    add_variable(var_name, ast->scope, current_stack_size);
+                    add_variable(var_name, ast->scope, e);
+                    evaluate(ast->right, bytes, n_bytes, e);
 
                     return 0;
                 }
 
-                evaluate(ast->right, bytes, n_bytes, current_stack_size);
+                evaluate(ast->right, bytes, n_bytes, e);
 
                 add_instruction(CHANGE);
                 add_number(position);
@@ -283,8 +281,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
             }
         case NODE_STATEMENT:
             {
-                evaluate(ast->left, bytes, n_bytes, current_stack_size);
-                evaluate(ast->right, bytes, n_bytes, current_stack_size);
+                evaluate(ast->left, bytes, n_bytes, e);
+                evaluate(ast->right, bytes, n_bytes, e);
 
                 return 0;
             }
@@ -294,7 +292,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
                 const char* function_name = ast->token->value;
 
                 if (strcmp(function_name, "print") == 0) {
-                    evaluate(ast->left, bytes, n_bytes, current_stack_size);
+                    evaluate(ast->left, bytes, n_bytes, e);
 
                     add_instruction(PRINT);
 
@@ -314,8 +312,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, uint32_t* curr
 
         case NODE_NOT:
             {
-                evaluate(ast->left, bytes, n_bytes, current_stack_size);
-                add_instruction(PRINT);
+                evaluate(ast->left, bytes, n_bytes, e);
+                add_instruction(NOT);
 
                 return 0;
             }

@@ -513,30 +513,39 @@ static int parse_statements(struct parser* parser, struct node** root, bool brac
     }
 
 
-    struct node* first_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, parser->current_scope);
-    if (!first_statement) {
-        ERROR("Error allocating memory");
-        return 1;
-    }
-
-    struct node* statement = first_statement;
+    struct node* first_statement = NULL;
+    struct node* statement = NULL;
 
     while (current_token->code != TOK_RBR && current_token->code != TOK_EOF) {
+        if (!statement) {
+            statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, parser->current_scope);
+            if (!statement) {
+                ERROR("Error allocating memory");
+                return 1;
+            }
+        } else {
+            statement->right = node_new(NODE_STATEMENT, NULL, NULL, NULL, parser->current_scope);
+            if (!statement->right) {
+                ERROR("Error allocating memory");
+                return 1;
+            }
+            statement = statement->right;
+        }
+
         if (parse_statement(parser, &statement->left) != 0) {
             ERROR("failed to parse statement");
             return 1;
         }
 
-        struct node* new_statement = node_new(NODE_STATEMENT, NULL, NULL, NULL, parser->current_scope);
-        if (!new_statement) {
-            ERROR("Error allocating memory");
-            return 1;
+        if (!first_statement) {
+            first_statement = statement;
         }
 
-        statement->right = new_statement;
-        statement = new_statement;
         current_token = get_token();
     }
+
+    free(statement->right);
+    statement->right = NULL;
 
     if (brackets) {
         if (current_token->code != TOK_RBR) {

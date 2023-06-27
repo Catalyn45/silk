@@ -64,7 +64,8 @@ int main(int argc, char* argv[]) {
         uint8_t bytes[2048];
         uint32_t n_bytes = 0;
 
-        if (evaluate(ast, bytes, &n_bytes, NULL) != 0) {
+        struct evaluator e={ };
+        if (evaluate(ast, bytes, &n_bytes, &e) != 0) {
             ERROR("failed to evaluate")
             return 1;
         }
