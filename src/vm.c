@@ -2,6 +2,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "stdlib.h"
+#include "utils.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +30,25 @@ static void add_variable(const char* var_name, uint32_t scope, struct evaluator*
     };
 }
 
+static struct function* get_function(const char* function_name, struct evaluator* e) {
+    for (uint i = 0; i < e->n_functions; ++i) {
+        if (strcmp(e->functions[i].name, function_name) == 0) {
+            return &e->functions[i];
+        }
+    }
+
+    return NULL;
+}
+
+static void add_function(const char* function_name, const char** parameters, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
+    e->functions[e->n_functions++] = (struct function) {
+        .name = function_name,
+        .parameters = parameters,
+        .n_parameters = n_parameters,
+        .index = index
+    };
+}
+
 static uint32_t scope_push_count(struct evaluator* e, uint32_t scope) {
     uint32_t count = 0;
     uint32_t n = e->n_locals;
@@ -41,29 +61,6 @@ static uint32_t scope_push_count(struct evaluator* e, uint32_t scope) {
     return count;
 }
 
-enum instructions {
-    PUSH,
-    POP,
-    ADD,
-    MIN,
-    MUL,
-    DIV,
-    NOT,
-    DEQ,
-    NEQ,
-    GRE,
-    GRQ,
-    LES,
-    LEQ,
-    AND,
-    OR,
-    DUP,
-    PRINT,
-    CHANGE,
-    JMP_NOT,
-    JMP,
-};
-
 #define add_instruction(code) \
 { \
     bytes[(*n_bytes)++] = code; \
@@ -75,7 +72,7 @@ enum instructions {
     (*n_bytes) += sizeof(num); \
 }
 
-int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluator* e) {
+int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, struct evaluator* e) {
     if (ast == NULL) {
         return 0;
     }
@@ -107,85 +104,85 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluat
         case NODE_BINARY_OP:
             switch (ast->token->code) {
                 case TOK_ADD:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(ADD);
                     return 0;
 
                 case TOK_MIN:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(MIN);
                     return 0;
 
                 case TOK_MUL:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(MUL);
                     return 0;
 
                 case TOK_DIV:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(DIV);
                     return 0;
 
                 case TOK_LES:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(LES);
                     return 0;
 
                 case TOK_LEQ:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(LEQ);
                     return 0;
 
                 case TOK_GRE:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(GRE);
                     return 0;
 
                 case TOK_GRQ:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(GRQ);
                     return 0;
 
                 case TOK_DEQ:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(DEQ);
                     return 0;
 
                 case TOK_NEQ:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(NEQ);
                     return 0;
 
                 case TOK_AND:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(AND);
                     return 0;
 
                 case TOK_OR:
-                    evaluate(ast->right, bytes, n_bytes, e);
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(OR);
                     return 0;
@@ -197,14 +194,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluat
         case NODE_IF:
             {
                 // statements
-                evaluate(ast->left, bytes, n_bytes, e);
+                evaluate(ast->left, bytes, n_bytes, data, e);
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_true_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_true_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, e);
+                evaluate(ast->right->left, bytes, n_bytes, data, e);
 
                 for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
                     add_instruction(POP);
@@ -220,7 +217,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluat
                 memcpy(&bytes[placeholder_true_index], n_bytes, sizeof(*n_bytes));
 
                 // false
-                evaluate(ast->right->right, bytes, n_bytes, e);
+                evaluate(ast->right->right, bytes, n_bytes, data, e);
 
                 for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
                     add_instruction(POP);
@@ -237,14 +234,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluat
                 uint32_t start_index = *n_bytes;
 
                 // statements
-                evaluate(ast->left, bytes, n_bytes, e);
+                evaluate(ast->left, bytes, n_bytes, data, e);
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_false_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_false_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, e);
+                evaluate(ast->right->left, bytes, n_bytes, data, e);
 
                 for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
                     add_instruction(POP);
@@ -266,12 +263,12 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluat
                 int res = get_variable(var_name, e, &position);
                 if (res != 0) {
                     add_variable(var_name, ast->scope, e);
-                    evaluate(ast->right, bytes, n_bytes, e);
+                    evaluate(ast->right, bytes, n_bytes, data, e);
 
                     return 0;
                 }
 
-                evaluate(ast->right, bytes, n_bytes, e);
+                evaluate(ast->right, bytes, n_bytes, data, e);
 
                 add_instruction(CHANGE);
                 add_number(position);
@@ -281,53 +278,99 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct evaluat
             }
         case NODE_STATEMENT:
             {
-                evaluate(ast->left, bytes, n_bytes, e);
-                evaluate(ast->right, bytes, n_bytes, e);
+                evaluate(ast->left, bytes, n_bytes, data, e);
+                evaluate(ast->right, bytes, n_bytes, data, e);
 
                 return 0;
             }
 
         case NODE_FUNCTION_CALL:
             {
-                const char* function_name = ast->token->value;
 
+                const char* function_name = ast->token->value;
                 if (strcmp(function_name, "print") == 0) {
-                    evaluate(ast->left, bytes, n_bytes, e);
+                    evaluate(ast->left, bytes, n_bytes, data, e);
 
                     add_instruction(PRINT);
 
                     return 0;
                 }
 
-                /*
+                struct function* f = get_function(function_name, e);
+                if (!f) {
+                    ERROR("function not definited");
+                    return 1;
+                }
 
-                struct var* v = var_from_mem(function_name);
-                struct node* function_node = v->ref;
+                struct node* arguments = ast->left;
+                struct node* argument = arguments;
 
-                return evaluate(function_node->right, NULL, NULL);
 
-                */
+                add_instruction(PUSH);
+                uint32_t placeholder = *n_bytes;
+                (*n_bytes) += sizeof(placeholder);
+
+
+                while (argument) {
+                    evaluate(argument, bytes, n_bytes, data, e);
+                    argument = argument->left;
+                }
+
+                add_instruction(JMP);
+                add_number(f->index);
+
+                memcpy(&bytes[placeholder], n_bytes, sizeof(*n_bytes));
+
                 return 0;
             }
 
         case NODE_NOT:
             {
-                evaluate(ast->left, bytes, n_bytes, e);
+                evaluate(ast->left, bytes, n_bytes, data, e);
                 add_instruction(NOT);
 
                 return 0;
             }
-        /*
+
         case NODE_FUNCTION:
             {
+                const char** parameters = malloc(1024 * sizeof(*parameters));
+                if (!parameters) {
+                    ERROR("error allocating memory");
+                    return 1;
+                }
+
+                uint32_t n_parameters = 0;
+
+                add_variable("return", ast->scope + 1, e);
+
+                struct node* parameter = ast->left;
+                while (parameter) {
+                    add_variable(parameter->token->value, ast->scope + 1, e);
+
+                    parameters[n_parameters++] = parameter->token->value;
+                    parameter = parameter->left;
+                }
+
+                add_instruction(JMP);
+
+                uint32_t placeholder_index = *n_bytes;
+                (*n_bytes) += sizeof(placeholder_index);
+
                 const char* fun_name = ast->token->value;
-                memory[used_mem++] = (struct var) {
-                    .name = fun_name,
-                    .ref = (void*)ast
-                };
+                add_function(fun_name, parameters, n_parameters, *n_bytes, e);
+
+                evaluate(ast->right, bytes, n_bytes, data, e);
+
+                for (uint32_t i = 0; i < scope_push_count(e, ast->scope + 1) + n_parameters; ++i)
+                    add_instruction(POP);
+
+                add_instruction(RET);
+
+                memcpy(&bytes[placeholder_index], n_bytes, sizeof(*n_bytes));
 
                 return 0;
-            } */
+            }
         default:
             return 0;
     }
@@ -494,6 +537,13 @@ int execute(struct vm* vm) {
             case JMP:
                 {
                     uint32_t index = read_value(uint32_t);
+                    vm->program_counter = index - 1;
+                }
+                break;
+
+            case RET:
+                {
+                    uint32_t index = vm->stack[--vm->stack_size];
                     vm->program_counter = index - 1;
                 }
                 break;

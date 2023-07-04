@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "parser.h"
 #include "utils.h"
+#include "vm.h"
 
 const char* rev_tokens[] = {
     "int",       // TOK_INT, // integer (20)
@@ -47,6 +48,51 @@ static const char* rev_node[] = {
     "FUNCTION",
     "DECISION"
 };
+
+static const char* rev_instruction[] = {
+    "PUSH",
+    "POP",
+    "ADD",
+    "MIN",
+    "MUL",
+    "DIV",
+    "NOT",
+    "DEQ",
+    "NEQ",
+    "GRE",
+    "GRQ",
+    "LES",
+    "LEQ",
+    "AND",
+    "OR",
+    "DUP",
+    "PRINT",
+    "CHANGE",
+    "JMP_NOT",
+    "JMP",
+    "CALL",
+    "RET"
+};
+
+void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
+    for (uint32_t i = 0; i < n_bytes; ++i) {
+        printf("%d: %s", i, rev_instruction[bytes[i]]);
+
+        switch (bytes[i]) {
+            case PUSH:
+            case DUP:
+            case CHANGE:
+            case JMP_NOT:
+            case JMP:
+            case CALL:
+                printf(" %d", *((uint32_t*)&bytes[i + 1]));
+                i += sizeof(uint32_t);
+                break;
+        }
+
+        printf("\n");
+    }
+}
 
 void dump_ast(struct node* root, int indent, bool is_statement) {
     if (!root)

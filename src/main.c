@@ -64,11 +64,14 @@ int main(int argc, char* argv[]) {
         uint8_t bytes[2048];
         uint32_t n_bytes = 0;
 
-        struct evaluator e={ };
-        if (evaluate(ast, bytes, &n_bytes, &e) != 0) {
+        struct evaluator e = {};
+        struct binary_data d = {};
+        if (evaluate(ast, bytes, &n_bytes, &d, &e) != 0) {
             ERROR("failed to evaluate")
             return 1;
         }
+
+        disassembly(bytes, n_bytes);
 
         struct vm vm = {
             .bytes = bytes,

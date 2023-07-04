@@ -285,8 +285,6 @@ static int parse_assignment(struct parser* parser, struct node** root ) {
 }
 
 static int parse_parameter_list(struct parser* parser, struct node** root ) {
-    (void) root;
-
     const struct token_entry* current_token = get_token();
     if (current_token->code != TOK_LPR) {
         EXPECTED_TOKEN(TOK_LPR, current_token->code);
@@ -294,7 +292,10 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
     }
 
     struct node* parameter_list = NULL;
-    struct node* parameter = NULL;
+
+    struct node first_parameter = {0};
+    struct node* parameter = &first_parameter;
+
     do {
 
         // eat left par or comma
@@ -302,7 +303,7 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
 
         current_token = get_token();
         if (current_token->code != TOK_COM && current_token->code != TOK_RPR) {
-            int res = parse_expression(parser, &parameter);
+            int res = parse_expression(parser, &parameter->left);
             if (res != 0) {
                 ERROR("failed to parse expression");
                 return res;
@@ -312,7 +313,8 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
                 parameter_list = parameter;
             }
 
-            parameter = parameter->right;
+            parameter = parameter->left;
+            current_token = get_token();
         }
 
     } while (current_token->code == TOK_COM );
@@ -326,7 +328,7 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = parameter_list;
+    *root = parameter_list->left;
     return 0;
 }
 
@@ -354,8 +356,6 @@ static int parse_function_call(struct parser* parser, struct node** root ) {
 }
 
 static int parse_argument_list(struct parser* parser, struct node** root ) {
-    (void) root;
-
     const struct token_entry* current_token = get_token();
     if (current_token->code != TOK_LPR) {
         EXPECTED_TOKEN(TOK_LPR, current_token->code);
@@ -363,7 +363,9 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
     }
 
     struct node* argument_list = NULL;
-    struct node* argument = NULL;
+
+    struct node first_arg = {0};
+    struct node* argument = &first_arg;
 
     do {
         // eat left par or comma
@@ -371,7 +373,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
 
         current_token = get_token();
         if (current_token->code == TOK_IDN) {
-            argument = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
+            argument->left = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
             if (!argument) {
                 ERROR("failed allocating memory");
                 return 1;
@@ -381,13 +383,12 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
                 argument_list = argument;
             }
 
-            argument = argument->right;
-
-            // eat identifier
+            // TODO: fix here
+            argument = argument->left;
             advance();
         }
 
-    } while (current_token->code == TOK_COM );
+    } while (get_token()->code == TOK_COM );
 
     current_token = get_token();
     if (current_token->code != TOK_RPR) {
@@ -398,7 +399,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = argument_list;
+    *root = argument_list->left;
     return 0;
 }
 
