@@ -102,94 +102,63 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
 
         case NODE_BINARY_OP:
+            evaluate(ast->right, bytes, n_bytes, data, e);
+            evaluate(ast->left, bytes, n_bytes, data, e);
+
             switch (ast->token->code) {
                 case TOK_ADD:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(ADD);
-                    return 0;
+                    break;
 
                 case TOK_MIN:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(MIN);
-                    return 0;
+                    break;
 
                 case TOK_MUL:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(MUL);
-                    return 0;
+                    break;
 
                 case TOK_DIV:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(DIV);
-                    return 0;
+                    break;
 
                 case TOK_LES:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(LES);
-                    return 0;
+                    break;
 
                 case TOK_LEQ:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(LEQ);
-                    return 0;
+                    break;
 
                 case TOK_GRE:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(GRE);
-                    return 0;
+                    break;
 
                 case TOK_GRQ:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(GRQ);
-                    return 0;
+                    break;
 
                 case TOK_DEQ:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(DEQ);
-                    return 0;
+                    break;
 
                 case TOK_NEQ:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(NEQ);
-                    return 0;
+                    break;
 
                 case TOK_AND:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(AND);
-                    return 0;
+                    break;
 
                 case TOK_OR:
-                    evaluate(ast->right, bytes, n_bytes, data, e);
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
                     add_instruction(OR);
-                    return 0;
+                    break;
 
                 default:
-                    return 0;
+                    return 1;
             }
+
+            return 0;
 
         case NODE_IF:
             {

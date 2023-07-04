@@ -284,17 +284,17 @@ static int parse_assignment(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_parameter_list(struct parser* parser, struct node** root ) {
+static int parse_argument_list(struct parser* parser, struct node** root ) {
     const struct token_entry* current_token = get_token();
     if (current_token->code != TOK_LPR) {
         EXPECTED_TOKEN(TOK_LPR, current_token->code);
         return 1;
     }
 
-    struct node* parameter_list = NULL;
+    struct node* argument_list = NULL;
 
-    struct node first_parameter = {0};
-    struct node* parameter = &first_parameter;
+    struct node first_arg = {0};
+    struct node* argument = &first_arg;
 
     do {
 
@@ -303,17 +303,17 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
 
         current_token = get_token();
         if (current_token->code != TOK_COM && current_token->code != TOK_RPR) {
-            int res = parse_expression(parser, &parameter->left);
+            int res = parse_expression(parser, &argument->left);
             if (res != 0) {
                 ERROR("failed to parse expression");
                 return res;
             }
 
-            if (!parameter_list) {
-                parameter_list = parameter;
+            if (!argument_list) {
+                argument_list = argument;
             }
 
-            parameter = parameter->left;
+            argument = argument->left;
             current_token = get_token();
         }
 
@@ -328,7 +328,7 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = parameter_list->left;
+    *root = argument_list->left;
     return 0;
 }
 
@@ -339,7 +339,7 @@ static int parse_function_call(struct parser* parser, struct node** root ) {
     advance();
 
     struct node* function_parameters = NULL;
-    int res = parse_parameter_list(parser, &function_parameters);
+    int res = parse_argument_list(parser, &function_parameters);
     if (res != 0) {
         ERROR("failed to parse parameter list");
         return 1;
@@ -355,17 +355,17 @@ static int parse_function_call(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_argument_list(struct parser* parser, struct node** root ) {
+static int parse_parameter_list(struct parser* parser, struct node** root ) {
     const struct token_entry* current_token = get_token();
     if (current_token->code != TOK_LPR) {
         EXPECTED_TOKEN(TOK_LPR, current_token->code);
         return 1;
     }
 
-    struct node* argument_list = NULL;
+    struct node* parameter_list = NULL;
 
-    struct node first_arg = {0};
-    struct node* argument = &first_arg;
+    struct node first_par = {0};
+    struct node* parameter = &first_par;
 
     do {
         // eat left par or comma
@@ -373,18 +373,18 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
 
         current_token = get_token();
         if (current_token->code == TOK_IDN) {
-            argument->left = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
-            if (!argument) {
+            parameter->left = node_new(NODE_PARAMETER, current_token, NULL, NULL, parser->current_scope);
+            if (!parameter) {
                 ERROR("failed allocating memory");
                 return 1;
             }
 
-            if (!argument_list) {
-                argument_list = argument;
+            if (!parameter_list) {
+                parameter_list = parameter;
             }
 
             // TODO: fix here
-            argument = argument->left;
+            parameter = parameter->left;
             advance();
         }
 
@@ -399,7 +399,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = argument_list->left;
+    *root = parameter_list->left;
     return 0;
 }
 
@@ -417,7 +417,7 @@ static int parse_function(struct parser* parser, struct node** root ) {
     advance();
 
     struct node* arguments;
-    int res = parse_argument_list(parser, &arguments);
+    int res = parse_parameter_list(parser, &arguments);
     if (res != 0) {
         ERROR("failed to parse argument list");
         return res;

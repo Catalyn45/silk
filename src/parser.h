@@ -15,7 +15,8 @@ enum node_type {
     NODE_FUNCTION_CALL = 7,
     NODE_NOT = 8,
     NODE_FUNCTION = 9,
-    NODE_DECISION = 10
+    NODE_DECISION = 10,
+    NODE_PARAMETER = 11
 };
 
 struct parser {

@@ -76,7 +76,7 @@ static const char* rev_instruction[] = {
 
 void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
     for (uint32_t i = 0; i < n_bytes; ++i) {
-        printf("%d: %s", i, rev_instruction[bytes[i]]);
+        printf("%-3d : %s", i, rev_instruction[bytes[i]]);
 
         switch (bytes[i]) {
             case PUSH:
