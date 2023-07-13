@@ -6,12 +6,13 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/types.h>
 
 static int get_variable(const char* name, struct evaluator* e, uint32_t* index) {
     for (uint32_t i = 0; i < e->n_locals; ++i) {
         if (strcmp(name, e->locals[i].name) == 0) {
-            *index = i;
+            *index = e->locals[i].stack_index;
             return 0;
         }
     }
@@ -19,15 +20,22 @@ static int get_variable(const char* name, struct evaluator* e, uint32_t* index) 
     return 1;
 }
 
-static void add_variable(const char* var_name, uint32_t scope, struct evaluator* e) {
+static void add_variable(const char* var_name, uint32_t scope, uint32_t index, struct evaluator* e) {
     while (e->n_locals > 0 && e->locals[e->n_locals - 1].scope > scope) {
         --(e->n_locals);
     }
 
     e->locals[e->n_locals++] = (struct var) {
         .name = var_name,
-        .scope = scope
+        .scope = scope,
+        .stack_index = index
     };
+}
+
+static void clean_variables(uint32_t scope, struct evaluator* e) {
+    while (e->n_locals > 0 && e->locals[e->n_locals - 1].scope > scope) {
+        --(e->n_locals);
+    }
 }
 
 static struct function* get_function(const char* function_name, struct evaluator* e) {
@@ -54,7 +62,9 @@ static uint32_t scope_push_count(struct evaluator* e, uint32_t scope) {
     uint32_t n = e->n_locals;
 
     while (n > 0 && e->locals[n - 1].scope > scope) {
-        count += 1;
+        if (e->locals[n - 1].stack_index >= 0)
+            count += 1;
+
         --n;
     }
 
@@ -68,24 +78,29 @@ static uint32_t scope_push_count(struct evaluator* e, uint32_t scope) {
 
 #define add_number(num) \
 { \
-    memcpy(&bytes[*n_bytes], &num, sizeof(num)); \
+    int32_t int_value = (int32_t)num; \
+    memcpy(&bytes[*n_bytes], &int_value, sizeof(int_value)); \
     (*n_bytes) += sizeof(num); \
 }
 
-int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, struct evaluator* e) {
+#define increment_index() \
+    ++(*current_stack_index)
+
+int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e) {
     if (ast == NULL) {
         return 0;
     }
 
     switch (ast->type) {
         case NODE_NUMBER:
-            add_instruction(PUSH);
+            {
+                add_instruction(PUSH);
 
-            memcpy(&bytes[*n_bytes], ast->token->value, sizeof(uint32_t));
-            (*n_bytes) += sizeof(uint32_t);
+                memcpy(&bytes[*n_bytes], ast->token->value, sizeof(uint32_t));
+                (*n_bytes) += sizeof(uint32_t);
 
-            return 0;
-
+                return 0;
+            }
         case NODE_VAR:
             {
                 uint32_t position;
@@ -102,8 +117,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
 
         case NODE_BINARY_OP:
-            evaluate(ast->right, bytes, n_bytes, data, e);
-            evaluate(ast->left, bytes, n_bytes, data, e);
+            evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
+            evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
 
             switch (ast->token->code) {
                 case TOK_ADD:
@@ -163,14 +178,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
         case NODE_IF:
             {
                 // statements
-                evaluate(ast->left, bytes, n_bytes, data, e);
+                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_true_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_true_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, data, e);
+                evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
 
                 for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
                     add_instruction(POP);
@@ -186,10 +201,12 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 memcpy(&bytes[placeholder_true_index], n_bytes, sizeof(*n_bytes));
 
                 // false
-                evaluate(ast->right->right, bytes, n_bytes, data, e);
+                evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e);
 
                 for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
                     add_instruction(POP);
+
+                clean_variables(ast->scope, e);
 
                 if (ast->right->right) {
                     memcpy(&bytes[placeholder_false_index], n_bytes, sizeof(*n_bytes));
@@ -203,17 +220,19 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 uint32_t start_index = *n_bytes;
 
                 // statements
-                evaluate(ast->left, bytes, n_bytes, data, e);
+                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_false_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_false_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, data, e);
+                evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
 
                 for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
                     add_instruction(POP);
+
+                clean_variables(ast->scope, e);
 
                 add_instruction(JMP);
                 add_number(start_index);
@@ -231,13 +250,15 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 uint32_t position;
                 int res = get_variable(var_name, e, &position);
                 if (res != 0) {
-                    add_variable(var_name, ast->scope, e);
-                    evaluate(ast->right, bytes, n_bytes, data, e);
+                    add_variable(var_name, ast->scope, *current_stack_index, e);
+                    increment_index();
+
+                    evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
 
                     return 0;
                 }
 
-                evaluate(ast->right, bytes, n_bytes, data, e);
+                evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
 
                 add_instruction(CHANGE);
                 add_number(position);
@@ -247,55 +268,15 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
         case NODE_STATEMENT:
             {
-                evaluate(ast->left, bytes, n_bytes, data, e);
-                evaluate(ast->right, bytes, n_bytes, data, e);
-
-                return 0;
-            }
-
-        case NODE_FUNCTION_CALL:
-            {
-
-                const char* function_name = ast->token->value;
-                if (strcmp(function_name, "print") == 0) {
-                    evaluate(ast->left, bytes, n_bytes, data, e);
-
-                    add_instruction(PRINT);
-
-                    return 0;
-                }
-
-                struct function* f = get_function(function_name, e);
-                if (!f) {
-                    ERROR("function not definited");
-                    return 1;
-                }
-
-                struct node* arguments = ast->left;
-                struct node* argument = arguments;
-
-
-                add_instruction(PUSH);
-                uint32_t placeholder = *n_bytes;
-                (*n_bytes) += sizeof(placeholder);
-
-
-                while (argument) {
-                    evaluate(argument, bytes, n_bytes, data, e);
-                    argument = argument->left;
-                }
-
-                add_instruction(JMP);
-                add_number(f->index);
-
-                memcpy(&bytes[placeholder], n_bytes, sizeof(*n_bytes));
+                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+                evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
 
                 return 0;
             }
 
         case NODE_NOT:
             {
-                evaluate(ast->left, bytes, n_bytes, data, e);
+                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
                 add_instruction(NOT);
 
                 return 0;
@@ -311,11 +292,9 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
                 uint32_t n_parameters = 0;
 
-                add_variable("return", ast->scope + 1, e);
-
                 struct node* parameter = ast->left;
                 while (parameter) {
-                    add_variable(parameter->token->value, ast->scope + 1, e);
+                    add_variable(parameter->token->value, ast->scope + 1, -1 - n_parameters, e);
 
                     parameters[n_parameters++] = parameter->token->value;
                     parameter = parameter->left;
@@ -329,10 +308,13 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 const char* fun_name = ast->token->value;
                 add_function(fun_name, parameters, n_parameters, *n_bytes, e);
 
-                evaluate(ast->right, bytes, n_bytes, data, e);
+                // the first 2 are old base and return address
+                uint32_t new_stack_index = 2;
+                evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e);
 
-                for (uint32_t i = 0; i < scope_push_count(e, ast->scope + 1) + n_parameters; ++i)
+                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i) {
                     add_instruction(POP);
+                }
 
                 add_instruction(RET);
 
@@ -340,6 +322,49 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
                 return 0;
             }
+
+        case NODE_FUNCTION_CALL:
+            {
+                const char* function_name = ast->token->value;
+                if (strcmp(function_name, "print") == 0) {
+                    evaluate(ast->left->left, bytes, n_bytes, data, current_stack_index, e);
+
+                    add_instruction(PRINT);
+
+                    return 0;
+                }
+
+                struct function* f = get_function(function_name, e);
+                if (!f) {
+                    ERROR("function not definited");
+                    return 1;
+                }
+
+                struct node* arguments = ast->left;
+                struct node* argument = arguments;
+
+                uint32_t n_arguments = 0;
+                struct node* arg_list[256];
+
+                while (argument) {
+                    arg_list[n_arguments++] = argument->left;
+                    argument = argument->right;
+                }
+
+                for (int32_t i = n_arguments - 1; i >= 0; --i) {
+                    evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e);
+                }
+
+                add_instruction(CALL);
+                add_number(f->index);
+
+                for (uint32_t i = 0; i < n_arguments; ++i) {
+                    add_instruction(POP);
+                }
+
+                return 0;
+            }
+
         default:
             return 0;
     }
@@ -350,11 +375,17 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 #define read_value(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1)));
 
+#define push(value) \
+    vm->stack[vm->stack_size++] = value;
+
+#define pop() \
+    vm->stack[--vm->stack_size];
+
 int execute(struct vm* vm) {
     while (!vm->halt && vm->program_counter < vm->n_bytes) {
         switch (vm->bytes[vm->program_counter]) {
             case PUSH:
-                vm->stack[vm->stack_size++] = read_value(uint32_t)
+                push(read_value(int32_t))
                 vm->program_counter += sizeof(uint32_t);
                 break;
 
@@ -364,17 +395,17 @@ int execute(struct vm* vm) {
 
             case ADD:
                 {
-                    uint32_t number1 = vm->stack[--vm->stack_size];
-                    uint32_t number2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = number1 + number2;
+                    uint32_t number1 = pop();
+                    uint32_t number2 = pop();
+                    push(number1 + number2);
                 }
                 break;
 
             case MIN:
                 {
-                    uint32_t number1 = vm->stack[--vm->stack_size];
-                    uint32_t number2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = number1 - number2;
+                    uint32_t number1 = pop();
+                    uint32_t number2 = pop();
+                    push(number1 - number2);
                 }
                 break;
 
@@ -382,7 +413,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t number1 = vm->stack[--vm->stack_size];
                     uint32_t number2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = number1 * number2;
+                    push(number1 * number2);
                 }
                 break;
 
@@ -390,7 +421,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t number1 = vm->stack[--vm->stack_size];
                     uint32_t number2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = number1 / number2;
+                    push(number1 / number2);
                 }
                 break;
 
@@ -398,9 +429,9 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp = vm->stack[--vm->stack_size];
                     if (exp) {
-                        vm->stack[vm->stack_size++] = 0;
+                        push(0);
                     } else {
-                        vm->stack[vm->stack_size++] = 1;
+                        push(1);
                     }
                 }
                 break;
@@ -409,7 +440,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 == exp2) ? 1 : 0;
+                    push((exp1 == exp2) ? 1 : 0);
                 }
                 break;
 
@@ -417,7 +448,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 != exp2) ? 1 : 0;
+                    push((exp1 != exp2) ? 1 : 0);
                 }
                 break;
 
@@ -425,7 +456,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 > exp2) ? 1 : 0;
+                    push((exp1 > exp2) ? 1 : 0);
                 }
                 break;
 
@@ -433,7 +464,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 >= exp2) ? 1 : 0;
+                    push((exp1 >= exp2) ? 1 : 0);
                 }
                 break;
 
@@ -441,7 +472,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 < exp2) ? 1 : 0;
+                    push((exp1 < exp2) ? 1 : 0);
                 }
                 break;
 
@@ -449,7 +480,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 <= exp2) ? 1 : 0;
+                    push((exp1 <= exp2) ? 1 : 0);
                 }
                 break;
 
@@ -457,7 +488,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 && exp2) ? 1 : 0;
+                    push((exp1 && exp2) ? 1 : 0);
                 }
                 break;
 
@@ -465,7 +496,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = vm->stack[--vm->stack_size];
                     uint32_t exp2 = vm->stack[--vm->stack_size];
-                    vm->stack[vm->stack_size++] = (exp1 || exp2) ? 1 : 0;
+                    push((exp1 || exp2) ? 1 : 0);
                 }
                 break;
 
@@ -478,22 +509,22 @@ int execute(struct vm* vm) {
 
             case DUP:
                 {
-                    uint32_t index = read_value(uint32_t)
-                    vm->stack[vm->stack_size++] = vm->stack[index];
+                    int32_t index = read_value(int32_t)
+                    push(vm->stack[vm->stack_base + index]);
                     vm->program_counter += sizeof(index);
                 }
                 break;
             case CHANGE:
                 {
-                    uint32_t index = read_value(uint32_t)
-                    vm->stack[index] = vm->stack[--vm->stack_size];
+                    int32_t index = read_value(int32_t)
+                    vm->stack[vm->stack_base + index] = vm->stack[--vm->stack_size];
                     vm->program_counter += sizeof(index);
                 }
                 break;
             case JMP_NOT:
                 {
                     uint32_t condition = vm->stack[--vm->stack_size];
-                    uint32_t index = read_value(uint32_t);
+                    int32_t index = read_value(int32_t);
 
                     if (!condition) {
                         vm->program_counter = index - 1;
@@ -505,14 +536,29 @@ int execute(struct vm* vm) {
 
             case JMP:
                 {
-                    uint32_t index = read_value(uint32_t);
+                    int32_t index = read_value(int32_t);
                     vm->program_counter = index - 1;
+                }
+                break;
+
+            case CALL:
+                {
+                    uint32_t old_base = vm->stack_base;
+                    vm->stack_base = vm->stack_size;
+
+                    push(vm->program_counter + 1 + sizeof(int32_t))
+
+                    int32_t index = read_value(int32_t);
+                    vm->program_counter = index - 1;
+
+                    push(old_base);
                 }
                 break;
 
             case RET:
                 {
-                    uint32_t index = vm->stack[--vm->stack_size];
+                    vm->stack_base = pop();
+                    uint32_t index = pop();
                     vm->program_counter = index - 1;
                 }
                 break;

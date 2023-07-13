@@ -34,6 +34,7 @@ struct var {
     const char* name;
     void* value;
     uint32_t scope;
+    int32_t stack_index;
 };
 
 struct function {
@@ -67,11 +68,12 @@ struct binary_data {
     uint32_t n_program_bytes;
 };
 
-int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, struct evaluator* e);
+int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
 
 struct vm {
     uint32_t stack[1024];
     uint32_t stack_size;
+    uint32_t stack_base;
 
     uint8_t* bytes;
     uint32_t n_bytes;

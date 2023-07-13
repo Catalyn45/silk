@@ -303,7 +303,13 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
 
         current_token = get_token();
         if (current_token->code != TOK_COM && current_token->code != TOK_RPR) {
-            int res = parse_expression(parser, &argument->left);
+            argument->right = node_new(NODE_ARGUMENT, NULL, NULL, NULL, parser->current_scope);
+            if (!argument->right) {
+                ERROR("failed allocating memory");
+                return 1;
+            }
+
+            int res = parse_expression(parser, &argument->right->left);
             if (res != 0) {
                 ERROR("failed to parse expression");
                 return res;
@@ -313,7 +319,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
                 argument_list = argument;
             }
 
-            argument = argument->left;
+            argument = argument->right;
             current_token = get_token();
         }
 
@@ -328,7 +334,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = argument_list->left;
+    *root = argument_list->right;
     return 0;
 }
 

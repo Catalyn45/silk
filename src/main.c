@@ -106,7 +106,9 @@ int main(int argc, char* argv[]) {
 
     struct evaluator e = {};
     struct binary_data d = {};
-    if (evaluate(ast, bytes, &n_bytes, &d, &e) != 0) {
+    uint32_t current_stack_index = 0;
+
+    if (evaluate(ast, bytes, &n_bytes, &d, &current_stack_index, &e) != 0) {
         ERROR("failed to evaluate")
         return 1;
     }
