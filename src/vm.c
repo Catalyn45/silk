@@ -10,7 +10,11 @@
 #include <sys/types.h>
 
 static int get_variable(const char* name, struct evaluator* e, uint32_t* index) {
-    for (uint32_t i = 0; i < e->n_locals; ++i) {
+    uint32_t i = e->n_locals;
+
+    while (i > 0) {
+        --i;
+
         if (strcmp(name, e->locals[i].name) == 0) {
             *index = e->locals[i].stack_index;
             return 0;
@@ -21,10 +25,6 @@ static int get_variable(const char* name, struct evaluator* e, uint32_t* index) 
 }
 
 static void add_variable(const char* var_name, uint32_t scope, uint32_t index, struct evaluator* e) {
-    while (e->n_locals > 0 && e->locals[e->n_locals - 1].scope > scope) {
-        --(e->n_locals);
-    }
-
     e->locals[e->n_locals++] = (struct var) {
         .name = var_name,
         .scope = scope,
@@ -32,10 +32,17 @@ static void add_variable(const char* var_name, uint32_t scope, uint32_t index, s
     };
 }
 
-static void clean_variables(uint32_t scope, struct evaluator* e) {
+static uint32_t clean_variables(uint32_t scope, struct evaluator* e) {
+    uint32_t count = 0;
+
     while (e->n_locals > 0 && e->locals[e->n_locals - 1].scope > scope) {
+        if (e->locals[e->n_locals - 1].stack_index >= 0)
+            count += 1;
+
         --(e->n_locals);
     }
+
+    return count;
 }
 
 static struct function* get_function(const char* function_name, struct evaluator* e) {
@@ -57,19 +64,6 @@ static void add_function(const char* function_name, const char** parameters, uin
     };
 }
 
-static uint32_t scope_push_count(struct evaluator* e, uint32_t scope) {
-    uint32_t count = 0;
-    uint32_t n = e->n_locals;
-
-    while (n > 0 && e->locals[n - 1].scope > scope) {
-        if (e->locals[n - 1].stack_index >= 0)
-            count += 1;
-
-        --n;
-    }
-
-    return count;
-}
 
 #define add_instruction(code) \
 { \
@@ -187,7 +181,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // true
                 evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
 
-                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
+                for (uint32_t i = 0; i < clean_variables(ast->scope, e); ++i)
                     add_instruction(POP);
 
                 uint32_t placeholder_false_index;
@@ -203,10 +197,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // false
                 evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e);
 
-                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
+                for (uint32_t i = 0; i < clean_variables(ast->scope, e); ++i)
                     add_instruction(POP);
-
-                clean_variables(ast->scope, e);
 
                 if (ast->right->right) {
                     memcpy(&bytes[placeholder_false_index], n_bytes, sizeof(*n_bytes));
@@ -219,7 +211,6 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 uint32_t start_index = *n_bytes;
 
-                // statements
                 evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
                 add_instruction(JMP_NOT);
 
@@ -229,10 +220,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // true
                 evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
 
-                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i)
+                for (uint32_t i = 0; i < clean_variables(ast->scope, e); ++i)
                     add_instruction(POP);
-
-                clean_variables(ast->scope, e);
 
                 add_instruction(JMP);
                 add_number(start_index);
@@ -312,7 +301,10 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 uint32_t new_stack_index = 2;
                 evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e);
 
-                for (uint32_t i = 0; i < scope_push_count(e, ast->scope); ++i) {
+                uint32_t to_pop = clean_variables(ast->scope, e);
+                // TODO: very strange behaviour, when i directly call the
+                // function it iterates one single time
+                for (uint32_t i = 0; i < to_pop; i++) {
                     add_instruction(POP);
                 }
 
