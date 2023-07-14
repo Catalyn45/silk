@@ -46,7 +46,9 @@ static const char* rev_node[] = {
     "FUNCTION_CALL",
     "NOT",
     "FUNCTION",
-    "DECISION"
+    "DECISION",
+    "PARAMETER",
+    "ARGUMENT"
 };
 
 static const char* rev_instruction[] = {

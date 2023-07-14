@@ -4,6 +4,7 @@
 #include "stdlib.h"
 #include "utils.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -32,7 +33,7 @@ static void add_variable(const char* var_name, uint32_t scope, uint32_t index, s
     };
 }
 
-static uint32_t clean_variables(uint32_t scope, struct evaluator* e) {
+static uint32_t pop_variables(uint32_t scope, struct evaluator* e) {
     uint32_t count = 0;
 
     while (e->n_locals > 0 && e->locals[e->n_locals - 1].scope > scope) {
@@ -55,10 +56,9 @@ static struct function* get_function(const char* function_name, struct evaluator
     return NULL;
 }
 
-static void add_function(const char* function_name, const char** parameters, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
+static void add_function(const char* function_name, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
     e->functions[e->n_functions++] = (struct function) {
         .name = function_name,
-        .parameters = parameters,
         .n_parameters = n_parameters,
         .index = index
     };
@@ -181,7 +181,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // true
                 evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
 
-                for (uint32_t i = 0; i < clean_variables(ast->scope, e); ++i)
+                uint32_t n_cleaned = pop_variables(ast->scope, e);
+                for (uint32_t i = 0; i < n_cleaned; ++i)
                     add_instruction(POP);
 
                 uint32_t placeholder_false_index;
@@ -197,7 +198,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // false
                 evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e);
 
-                for (uint32_t i = 0; i < clean_variables(ast->scope, e); ++i)
+                n_cleaned = pop_variables(ast->scope, e);
+                for (uint32_t i = 0; i < n_cleaned; ++i)
                     add_instruction(POP);
 
                 if (ast->right->right) {
@@ -220,7 +222,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // true
                 evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
 
-                for (uint32_t i = 0; i < clean_variables(ast->scope, e); ++i)
+                uint32_t n_cleaned = pop_variables(ast->scope, e);
+                for (uint32_t i = 0; i < n_cleaned; ++i)
                     add_instruction(POP);
 
                 add_instruction(JMP);
@@ -273,19 +276,11 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_FUNCTION:
             {
-                const char** parameters = malloc(1024 * sizeof(*parameters));
-                if (!parameters) {
-                    ERROR("error allocating memory");
-                    return 1;
-                }
-
                 uint32_t n_parameters = 0;
 
                 struct node* parameter = ast->left;
                 while (parameter) {
                     add_variable(parameter->token->value, ast->scope + 1, -1 - n_parameters, e);
-
-                    parameters[n_parameters++] = parameter->token->value;
                     parameter = parameter->left;
                 }
 
@@ -295,16 +290,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 (*n_bytes) += sizeof(placeholder_index);
 
                 const char* fun_name = ast->token->value;
-                add_function(fun_name, parameters, n_parameters, *n_bytes, e);
+                add_function(fun_name, n_parameters, *n_bytes, e);
 
                 // the first 2 are old base and return address
                 uint32_t new_stack_index = 2;
                 evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e);
 
-                uint32_t to_pop = clean_variables(ast->scope, e);
-                // TODO: very strange behaviour, when i directly call the
-                // function it iterates one single time
-                for (uint32_t i = 0; i < to_pop; i++) {
+                uint32_t n_cleaned = pop_variables(ast->scope, e);
+                for (uint32_t i = 0; i < n_cleaned; i++) {
                     add_instruction(POP);
                 }
 

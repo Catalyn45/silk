@@ -40,7 +40,6 @@ struct var {
 struct function {
     const char* name;
 
-    const char** parameters;
     uint32_t n_parameters;
     uint32_t index;
 };
@@ -71,7 +70,7 @@ struct binary_data {
 int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
 
 struct vm {
-    uint32_t stack[1024];
+    uint32_t stack[2048];
     uint32_t stack_size;
     uint32_t stack_base;
 
