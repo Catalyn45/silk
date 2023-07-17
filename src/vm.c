@@ -10,7 +10,7 @@
 #include <strings.h>
 #include <sys/types.h>
 
-static int get_variable(const char* name, struct evaluator* e, uint32_t* index) {
+static int get_variable(const char* name, struct evaluator* e, int32_t* index) {
     uint32_t i = e->n_locals;
 
     while (i > 0) {
@@ -97,8 +97,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
         case NODE_VAR:
             {
-                uint32_t position;
-
+                int32_t position;
                 int res = get_variable(ast->token->value, e, &position);
                 if (res != 0) {
                     return 1;
@@ -239,7 +238,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 const char* var_name = ast->left->token->value;
 
-                uint32_t position;
+                int32_t position;
                 int res = get_variable(var_name, e, &position);
                 if (res != 0) {
                     add_variable(var_name, ast->scope, *current_stack_index, e);
@@ -282,6 +281,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 while (parameter) {
                     add_variable(parameter->token->value, ast->scope + 1, -1 - n_parameters, e);
                     parameter = parameter->left;
+                    ++n_parameters;
                 }
 
                 add_instruction(JMP);
@@ -357,25 +357,46 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
     return 0;
 }
 
+#define stack_base \
+    vm->stack[STACK_BASE_INDEX]
+
+#define stack_size \
+    vm->stack[STACK_SIZE_INDEX]
+
+#define return_value \
+    vm->stack[RETURN_INDEX]
+
+#define program_counter \
+    vm->stack[PROGRAM_COUNTER]
+
 #define read_value(value_type) \
-    (*((value_type*)(vm->bytes + vm->program_counter + 1)));
+    (*((value_type*)(vm->bytes + program_counter + 1)))
 
 #define push(value) \
-    vm->stack[vm->stack_size++] = value;
+    vm->stack[stack_size++] = value
 
 #define pop() \
-    vm->stack[--vm->stack_size];
+    vm->stack[--stack_size]
 
 int execute(struct vm* vm) {
-    while (!vm->halt && vm->program_counter < vm->n_bytes) {
-        switch (vm->bytes[vm->program_counter]) {
+    // 0 - stack size
+    // 1 - stack base
+    // 2 - return value
+    // 3 - program counter
+
+    stack_size = 4;
+    stack_base = 4;
+    program_counter = 0;
+
+    while (!vm->halt && program_counter < vm->n_bytes) {
+        switch (vm->bytes[program_counter]) {
             case PUSH:
-                push(read_value(int32_t))
-                vm->program_counter += sizeof(uint32_t);
+                push(read_value(int32_t));
+                program_counter += sizeof(uint32_t);
                 break;
 
             case POP:
-                --vm->stack_size;
+                --stack_size;
                 break;
 
             case ADD:
@@ -396,23 +417,23 @@ int execute(struct vm* vm) {
 
             case MUL:
                 {
-                    uint32_t number1 = vm->stack[--vm->stack_size];
-                    uint32_t number2 = vm->stack[--vm->stack_size];
+                    uint32_t number1 = pop();
+                    uint32_t number2 = pop();
                     push(number1 * number2);
                 }
                 break;
 
             case DIV:
                 {
-                    uint32_t number1 = vm->stack[--vm->stack_size];
-                    uint32_t number2 = vm->stack[--vm->stack_size];
+                    uint32_t number1 = pop();
+                    uint32_t number2 = pop();
                     push(number1 / number2);
                 }
                 break;
 
             case NOT:
                 {
-                    uint32_t exp = vm->stack[--vm->stack_size];
+                    uint32_t exp = pop();
                     if (exp) {
                         push(0);
                     } else {
@@ -423,98 +444,98 @@ int execute(struct vm* vm) {
 
             case DEQ:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 == exp2) ? 1 : 0);
                 }
                 break;
 
             case NEQ:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 != exp2) ? 1 : 0);
                 }
                 break;
 
             case GRE:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 > exp2) ? 1 : 0);
                 }
                 break;
 
             case GRQ:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 >= exp2) ? 1 : 0);
                 }
                 break;
 
             case LES:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 < exp2) ? 1 : 0);
                 }
                 break;
 
             case LEQ:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 <= exp2) ? 1 : 0);
                 }
                 break;
 
             case AND:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 && exp2) ? 1 : 0);
                 }
                 break;
 
             case OR:
                 {
-                    uint32_t exp1 = vm->stack[--vm->stack_size];
-                    uint32_t exp2 = vm->stack[--vm->stack_size];
+                    uint32_t exp1 = pop();
+                    uint32_t exp2 = pop();
                     push((exp1 || exp2) ? 1 : 0);
                 }
                 break;
 
             case PRINT:
                 {
-                    uint32_t number = vm->stack[--vm->stack_size];
+                    uint32_t number = pop();
                     printf("%d\n", number);
                 }
                 break;
 
             case DUP:
                 {
-                    int32_t index = read_value(int32_t)
-                    push(vm->stack[vm->stack_base + index]);
-                    vm->program_counter += sizeof(index);
+                    int32_t index = read_value(int32_t);
+                    push(vm->stack[stack_base + index]);
+                    program_counter += sizeof(index);
                 }
                 break;
             case CHANGE:
                 {
-                    int32_t index = read_value(int32_t)
-                    vm->stack[vm->stack_base + index] = vm->stack[--vm->stack_size];
-                    vm->program_counter += sizeof(index);
+                    int32_t index = read_value(int32_t);
+                    vm->stack[stack_base + index] = pop();
+                    program_counter += sizeof(index);
                 }
                 break;
             case JMP_NOT:
                 {
-                    uint32_t condition = vm->stack[--vm->stack_size];
+                    uint32_t condition = pop();
                     int32_t index = read_value(int32_t);
 
                     if (!condition) {
-                        vm->program_counter = index - 1;
+                        program_counter = index - 1;
                     } else {
-                        vm->program_counter += sizeof(index);
+                        program_counter += sizeof(index);
                     }
                 }
                 break;
@@ -522,19 +543,19 @@ int execute(struct vm* vm) {
             case JMP:
                 {
                     int32_t index = read_value(int32_t);
-                    vm->program_counter = index - 1;
+                    program_counter = index - 1;
                 }
                 break;
 
             case CALL:
                 {
-                    uint32_t old_base = vm->stack_base;
-                    vm->stack_base = vm->stack_size;
+                    uint32_t old_base = stack_base;
+                    stack_base = stack_size;
 
-                    push(vm->program_counter + 1 + sizeof(int32_t))
+                    push(program_counter + 1 + sizeof(int32_t));
 
                     int32_t index = read_value(int32_t);
-                    vm->program_counter = index - 1;
+                    program_counter = index - 1;
 
                     push(old_base);
                 }
@@ -542,14 +563,15 @@ int execute(struct vm* vm) {
 
             case RET:
                 {
-                    vm->stack_base = pop();
+                    stack_base = pop();
+
                     uint32_t index = pop();
-                    vm->program_counter = index - 1;
+                    program_counter = index - 1;
                 }
                 break;
         }
 
-        ++vm->program_counter;
+        ++program_counter;
     }
 
     return 0;

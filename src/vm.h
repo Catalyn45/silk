@@ -70,18 +70,22 @@ struct binary_data {
 int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
 
 struct vm {
+    uint32_t globals[2048];
     uint32_t stack[2048];
-    uint32_t stack_size;
-    uint32_t stack_base;
 
     uint8_t* bytes;
     uint32_t n_bytes;
-
-    uint32_t program_counter;
 
     bool halt;
 };
 
 int execute(struct vm* vm);
+
+enum predefined_indexes {
+    STACK_SIZE_INDEX = 0,
+    STACK_BASE_INDEX = 1,
+    RETURN_INDEX = 2,
+    PROGRAM_COUNTER = 3
+};
 
 #endif
