@@ -110,6 +110,11 @@ int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text
         goto keyword;
     }
 
+    if (strcmp(value, "return") == 0) {
+        out_token->code = TOK_RET;
+        goto keyword;
+    }
+
     out_token->code = TOK_IDN;
     out_token->value = value;
 

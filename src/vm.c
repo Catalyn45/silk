@@ -46,6 +46,20 @@ static uint32_t pop_variables(uint32_t scope, struct evaluator* e) {
     return count;
 }
 
+static uint32_t get_var_count(uint32_t scope, struct evaluator* e) {
+    uint32_t count = 0;
+    uint32_t n = e->n_locals;
+
+    while (n > 0 && e->locals[n - 1].scope > scope) {
+        if (e->locals[n - 1].stack_index >= 0)
+            count += 1;
+
+        --n;
+    }
+
+    return count;
+}
+
 static struct function* get_function(const char* function_name, struct evaluator* e) {
     for (uint i = 0; i < e->n_functions; ++i) {
         if (strcmp(e->functions[i].name, function_name) == 0) {
@@ -197,11 +211,10 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 // false
                 evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e);
 
-                n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i)
-                    add_instruction(POP);
-
                 if (ast->right->right) {
+                    n_cleaned = pop_variables(ast->scope, e);
+                    for (uint32_t i = 0; i < n_cleaned; ++i)
+                        add_instruction(POP);
                     memcpy(&bytes[placeholder_false_index], n_bytes, sizeof(*n_bytes));
                 }
 
@@ -296,13 +309,6 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 uint32_t new_stack_index = 2;
                 evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e);
 
-                uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; i++) {
-                    add_instruction(POP);
-                }
-
-                add_instruction(RET);
-
                 memcpy(&bytes[placeholder_index], n_bytes, sizeof(*n_bytes));
 
                 return 0;
@@ -346,6 +352,24 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 for (uint32_t i = 0; i < n_arguments; ++i) {
                     add_instruction(POP);
                 }
+
+                add_instruction(DUP_ABS);
+                add_number(RETURN_INDEX);
+
+                return 0;
+            }
+
+        case NODE_RETURN:
+            {
+                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+                add_instruction(CHANGE_ABS);
+                add_number(RETURN_INDEX);
+
+                uint32_t n_cleaned = get_var_count(0, e);
+                for (uint32_t i = 0; i < n_cleaned; ++i)
+                    add_instruction(POP);
+
+                add_instruction(RET);
 
                 return 0;
             }
@@ -520,10 +544,24 @@ int execute(struct vm* vm) {
                     program_counter += sizeof(index);
                 }
                 break;
+            case DUP_ABS:
+                {
+                    int32_t index = read_value(int32_t);
+                    push(vm->stack[index]);
+                    program_counter += sizeof(index);
+                }
+                break;
             case CHANGE:
                 {
                     int32_t index = read_value(int32_t);
                     vm->stack[stack_base + index] = pop();
+                    program_counter += sizeof(index);
+                }
+                break;
+            case CHANGE_ABS:
+                {
+                    int32_t index = read_value(int32_t);
+                    vm->stack[index] = pop();
                     program_counter += sizeof(index);
                 }
                 break;
@@ -564,8 +602,8 @@ int execute(struct vm* vm) {
             case RET:
                 {
                     stack_base = pop();
-
                     uint32_t index = pop();
+
                     program_counter = index - 1;
                 }
                 break;

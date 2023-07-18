@@ -3,7 +3,7 @@ def fibonacci(n) {
     b = 1
 
     if n == 0 {
-        b = 0
+        return 0
     }
 
     while n > 1 {
@@ -14,8 +14,8 @@ def fibonacci(n) {
         n = n - 1
     }
 
-    print(b)
+    return b
 }
 
-fibonacci(10)
+print(fibonacci(10))
 

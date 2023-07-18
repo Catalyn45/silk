@@ -32,7 +32,8 @@ const char* rev_tokens[] = {
     "and",
     "or",
     ",",
-    "def"
+    "def",
+    "return"
 };
 
 static const char* rev_node[] = {
@@ -48,7 +49,8 @@ static const char* rev_node[] = {
     "FUNCTION",
     "DECISION",
     "PARAMETER",
-    "ARGUMENT"
+    "ARGUMENT",
+    "RETURN"
 };
 
 static const char* rev_instruction[] = {
@@ -68,8 +70,10 @@ static const char* rev_instruction[] = {
     "AND",
     "OR",
     "DUP",
+    "DUP_ABS",
     "PRINT",
     "CHANGE",
+    "CHANGE_ABS",
     "JMP_NOT",
     "JMP",
     "CALL",
@@ -83,7 +87,9 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
         switch (bytes[i]) {
             case PUSH:
             case DUP:
+            case DUP_ABS:
             case CHANGE:
+            case CHANGE_ABS:
             case JMP_NOT:
             case JMP:
             case CALL:
