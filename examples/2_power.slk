@@ -1,0 +1,12 @@
+def power_2(k) {
+    i = 0
+    power = 1
+    while( i < k ) {
+        power = power * 2
+        i = i + 1
+    }
+
+    return power
+}
+
+print(power_2(10))
