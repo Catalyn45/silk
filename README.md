@@ -1,4 +1,7 @@
 # sylk
+<p align="center">
+<img src="./logo.png" alt="drawing" width="30%"/>
+</p>
 
 Simple turing complete programming language that include `if`, `else`, `while`, `assignments`, `logical operations`, `arithmetic operations`, `function definitions` and `function calls`.
 See [examples](./examples) to see how to use it.
@@ -21,6 +24,6 @@ Just use `make sylk`. The project have no dependencies.
 - [x] logical operations
 - [x] function defenitions
 - [ ] string support
-- [ ] floating point support
+- [ ] list data structure
 - [ ] standard library
 

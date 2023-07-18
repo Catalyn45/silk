@@ -309,6 +309,13 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 uint32_t new_stack_index = 2;
                 evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e);
 
+                uint32_t n_cleaned = pop_variables(ast->scope, e);
+                for (uint32_t i = 0; i < n_cleaned; ++i)
+                    add_instruction(POP);
+
+                // TODO: double ret in case of return
+                add_instruction(RET);
+
                 memcpy(&bytes[placeholder_index], n_bytes, sizeof(*n_bytes));
 
                 return 0;
