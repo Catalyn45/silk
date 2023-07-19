@@ -24,13 +24,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const char * file_name = argv[1];
-    FILE* f = fopen(file_name, "r");
-    if (!f) {
-        printf("%s not existent\n", file_name);
-        return 1;
-    }
-
     bool print_ast = false;
     bool print_bytecode = false;
     bool execute_program = true;
@@ -69,6 +62,13 @@ int main(int argc, char* argv[]) {
         ++index;
     }
 
+    const char * file_name = argv[1];
+    FILE* f = fopen(file_name, "r");
+    if (!f) {
+        printf("%s not existent\n", file_name);
+        return 1;
+    }
+
     char text[2048];
     size_t size = fread(text, sizeof(char), sizeof(text), f);
     fclose(f);
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
     int res = tokenize(text, strlen(text), &tokens, &n_tokens);
     if (res != 0) {
         ERROR("failed to tokenize");
-        goto free_tokens;
+        return 1;
     }
 
     struct parser parser = {
@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
     res = parse(&parser, &ast);
     if (res != 0) {
         ERROR("failed to parse");
-        goto free_nodes;
+        return 1;
     }
 
     if (print_ast) {
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     uint32_t current_stack_index = 0;
 
     if (evaluate(ast, bytes, &n_bytes, &d, &current_stack_index, &e) != 0) {
-        ERROR("failed to evaluate")
+        ERROR("failed to evaluate");
         return 1;
     }
 
@@ -131,14 +131,12 @@ int main(int argc, char* argv[]) {
     }
 
 
-free_tokens:
     for (uint32_t i = 0; i < n_tokens; ++i) {
         free(tokens[i].value);
     }
 
     free(tokens);
 
-free_nodes:
     if (ast)
         node_free(ast);
 

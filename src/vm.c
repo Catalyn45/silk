@@ -112,10 +112,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
         case NODE_VAR:
             {
                 int32_t position;
-                int res = get_variable(ast->token->value, e, &position);
-                if (res != 0) {
-                    return 1;
-                }
+                CHECK(get_variable(ast->token->value, e, &position), "failed to get variable");
 
                 add_instruction(DUP);
                 add_number(position);
@@ -124,8 +121,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
 
         case NODE_BINARY_OP:
-            evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
-            evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+            CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate binary operation");
+            CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e),  "failed to evaluate binary operation");
 
             switch (ast->token->code) {
                 case TOK_ADD:
@@ -184,15 +181,15 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_IF:
             {
-                // statements
-                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate expression in if statement");
+
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_true_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_true_index);
 
                 // true
-                evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate \"true\" side in if statement");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i)
@@ -209,7 +206,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 memcpy(&bytes[placeholder_true_index], n_bytes, sizeof(*n_bytes));
 
                 // false
-                evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate \"false\" side in if statement");
 
                 if (ast->right->right) {
                     n_cleaned = pop_variables(ast->scope, e);
@@ -225,14 +222,15 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 uint32_t start_index = *n_bytes;
 
-                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate expression in while statement");
+
                 add_instruction(JMP_NOT);
 
                 uint32_t placeholder_false_index = *n_bytes;
                 (*n_bytes) += sizeof(placeholder_false_index);
 
-                // true
-                evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e);
+                // body
+                CHECK(evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate while statement body");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i)
@@ -257,12 +255,12 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     add_variable(var_name, ast->scope, *current_stack_index, e);
                     increment_index();
 
-                    evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
+                    CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate initialization value");
 
                     return 0;
                 }
 
-                evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate assignment value");
 
                 add_instruction(CHANGE);
                 add_number(position);
@@ -272,15 +270,16 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
         case NODE_STATEMENT:
             {
-                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
-                evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate current statement");
+                CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate next statement");
 
                 return 0;
             }
 
         case NODE_NOT:
             {
-                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate not statement");
+
                 add_instruction(NOT);
 
                 return 0;
@@ -307,7 +306,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
                 // the first 2 are old base and return address
                 uint32_t new_stack_index = 2;
-                evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e);
+                CHECK(evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e), "failed to evaluate function body");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i)
@@ -325,7 +324,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 const char* function_name = ast->token->value;
                 if (strcmp(function_name, "print") == 0) {
-                    evaluate(ast->left->left, bytes, n_bytes, data, current_stack_index, e);
+                    CHECK(evaluate(ast->left->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate print argument");
 
                     add_instruction(PRINT);
 
@@ -350,7 +349,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 }
 
                 for (int32_t i = n_arguments - 1; i >= 0; --i) {
-                    evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e);
+                    CHECK(evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function: %s argument", function_name);
                 }
 
                 add_instruction(CALL);
@@ -368,7 +367,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_RETURN:
             {
-                evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e);
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
+
                 add_instruction(CHANGE_ABS);
                 add_number(RETURN_INDEX);
 

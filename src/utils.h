@@ -14,7 +14,20 @@ extern const char* rev_tokens[];
 #define ERROR(message, ...) \
     printf("[ERROR] error: " message "\n" __VA_OPT__(,) __VA_ARGS__);
 
-#define EXPECTED_TOKEN(token_code_expected, token_code_got) \
-    ERROR("expected token %s, got token %s", rev_tokens[token_code_expected], rev_tokens[token_code_got]);
+#define MEMORY_ERROR() \
+    ERROR("failed to allocate memory");
+
+#define EXPECT_TOKEN(token, expected_token) \
+    if (token != expected_token) { \
+        ERROR("expected token %s, got token %s", rev_tokens[expected_token], rev_tokens[token]); \
+    }
+
+#define CHECK(result, message, ...) \
+{ \
+    if(result != 0) { \
+        ERROR(message, __VA_ARGS__); \
+        return 1;    \
+    } \
+}
 
 #endif
