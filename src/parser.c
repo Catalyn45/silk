@@ -27,23 +27,8 @@
 static int parse_expression(struct parser* parser, struct node** root);
 static int parse_function_call(struct parser* parser, struct node** root);
 
-static int parse_factor(struct parser* parser, struct node** root) {
+static int parse_primary(struct parser* parser, struct node** root) {
     const struct token_entry* current_token = get_token();
-
-    if (current_token->code == TOK_NOT) {
-        // eat ! keyword
-        advance();
-
-        struct node* not_expression;
-        CHECK(parse_expression(parser, &not_expression), "failed to parse expression");
-
-        struct node* not_node = node_new(NODE_NOT, NULL, not_expression, NULL, parser->current_scope);
-        CHECK_NODE(not_node);
-
-        *root = not_node;
-
-        return 0;
-    }
 
     if (current_token->code == TOK_LPR) {
         // eat left par
@@ -87,26 +72,172 @@ static int parse_factor(struct parser* parser, struct node** root) {
     return 1;
 }
 
-static int parse_term(struct parser* parser, struct node** root) {
+static int parse_unary(struct parser* parser, struct node** root) {
+    const struct token_entry* current_token = get_token();
+
+    if (current_token->code == TOK_NOT) {
+        // eat ! keyword
+        advance();
+
+        struct node* not_unary;
+        CHECK(parse_unary(parser, &not_unary), "failed to parse unary");
+
+        struct node* not_node = node_new(NODE_NOT, NULL, not_unary, NULL, parser->current_scope);
+        CHECK_NODE(not_node);
+
+        *root = not_node;
+
+        return 0;
+    }
+
+    CHECK(parse_primary(parser, root), "failed to parse primary");
+    return 0;
+}
+
+static int parse_multiplicative(struct parser* parser, struct node** root) {
     struct node* left;
-    CHECK(parse_factor(parser, &left), "failed to parse factor");
+    CHECK(parse_unary(parser, &left), "failed to parse unary");
 
     const struct token_entry* current_token = get_token();
     while (
         current_token->code == TOK_MUL  ||
-        current_token->code == TOK_DIV  ||
-        current_token->code == TOK_LES  ||
-        current_token->code == TOK_LEQ  ||
-        current_token->code == TOK_GRE  ||
-        current_token->code == TOK_GRQ  ||
-        current_token->code == TOK_DEQ  ||
-        current_token->code == TOK_NEQ
+        current_token->code == TOK_DIV
     ) {
         // eat current token
         advance();
 
         struct node* right;
-        CHECK(parse_factor(parser, &right), "failed to parse factor");
+        CHECK(parse_unary(parser, &right), "failed to parse unary");
+
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        CHECK_NODE(bin_op);
+
+        left = bin_op;
+        current_token = get_token();
+    }
+
+    *root = left;
+
+    return 0;
+}
+
+static int parse_additive(struct parser* parser, struct node** root) {
+    struct node* left;
+    CHECK(parse_multiplicative(parser, &left), "failed to parse multiplicative");
+
+    const struct token_entry* current_token = get_token();
+    while (
+        current_token->code == TOK_ADD  ||
+        current_token->code == TOK_MIN  ||
+        current_token->code == TOK_AND  ||
+        current_token->code == TOK_OR
+    ) {
+        // eat current token
+        advance();
+
+        struct node* right;
+        CHECK(parse_multiplicative(parser, &right), "failed to parse multiplicative");
+
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        CHECK_NODE(bin_op);
+
+        left = bin_op;
+        current_token = get_token();
+    }
+
+    *root = left;
+
+    return 0;
+}
+
+static int parse_relational(struct parser* parser, struct node** root) {
+    struct node* left;
+    CHECK(parse_additive(parser, &left), "failed to parse additive");
+
+    const struct token_entry* current_token = get_token();
+    while (
+        current_token->code == TOK_LES  ||
+        current_token->code == TOK_LEQ  ||
+        current_token->code == TOK_GRE  ||
+        current_token->code == TOK_GRQ
+    ) {
+        // eat current token
+        advance();
+
+        struct node* right;
+        CHECK(parse_additive(parser, &right), "failed to parse additive");
+
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        CHECK_NODE(bin_op);
+
+        left = bin_op;
+        current_token = get_token();
+    }
+
+    *root = left;
+
+    return 0;
+}
+
+static int parse_equality(struct parser* parser, struct node** root) {
+    struct node* left;
+    CHECK(parse_relational(parser, &left), "failed to parse relational");
+
+    const struct token_entry* current_token = get_token();
+    while (current_token->code == TOK_EQL || current_token->code == TOK_DEQ) {
+        // eat current token
+        advance();
+
+        struct node* right;
+        CHECK(parse_relational(parser, &right), "failed to parse relational");
+
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        CHECK_NODE(bin_op);
+
+        left = bin_op;
+        current_token = get_token();
+    }
+
+    *root = left;
+
+    return 0;
+}
+
+static int parse_and(struct parser* parser, struct node** root) {
+    struct node* left;
+    CHECK(parse_equality(parser, &left), "failed to parse equality");
+
+    const struct token_entry* current_token = get_token();
+    while (current_token->code == TOK_AND) {
+        // eat current token
+        advance();
+
+        struct node* right;
+        CHECK(parse_equality(parser, &right), "failed to parse equality");
+
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        CHECK_NODE(bin_op);
+
+        left = bin_op;
+        current_token = get_token();
+    }
+
+    *root = left;
+
+    return 0;
+}
+
+static int parse_or(struct parser* parser, struct node** root) {
+    struct node* left;
+    CHECK(parse_and(parser, &left), "failed to parse and");
+
+    const struct token_entry* current_token = get_token();
+    while (current_token->code == TOK_OR) {
+        // eat current token
+        advance();
+
+        struct node* right;
+        CHECK(parse_and(parser, &right), "failed to parse and");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
         CHECK_NODE(bin_op);
@@ -121,31 +252,7 @@ static int parse_term(struct parser* parser, struct node** root) {
 }
 
 static int parse_expression(struct parser* parser, struct node** root) {
-    struct node* left;
-    CHECK(parse_term(parser, &left), "failed to parse term");
-
-    const struct token_entry* current_token = get_token();
-    while (
-        current_token->code == TOK_ADD  ||
-        current_token->code == TOK_MIN  ||
-        current_token->code == TOK_AND  ||
-        current_token->code == TOK_OR
-    ) {
-        // eat current token
-        advance();
-
-        struct node* right;
-        CHECK(parse_term(parser, &right), "failed to parse term");
-
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
-        CHECK_NODE(bin_op);
-
-        left = bin_op;
-        current_token = get_token();
-    }
-
-    *root = left;
-
+    CHECK(parse_or(parser, root), "failed to parse or");
     return 0;
 }
 
