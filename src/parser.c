@@ -10,6 +10,9 @@
 #define get_token() \
     (&parser->tokens[parser->current_index])
 
+#define next_token() \
+    (&parser->tokens[parser->current_index + 1])
+
 #define advance() \
     (++parser->current_index)
 
@@ -56,29 +59,32 @@ static int parse_factor(struct parser* parser, struct node** root) {
         return 0;
     }
 
-    //TODO: function call is expression
+    if (current_token->code == TOK_INT) {
+        advance();
+
+        struct node* node_num = node_new(NODE_NUMBER, current_token, NULL, NULL, parser->current_scope);
+        CHECK_NODE(node_num);
+
+        *root = node_num;
+        return 0;
+    }
 
     if (current_token->code == TOK_IDN) {
-        if (parser->tokens[(parser->current_index) + 1].code == TOK_LPR) {
+        if (next_token()->code == TOK_LPR) {
             CHECK(parse_function_call(parser, root), "failed to parse function call");
             return 0;
         }
+
+        advance();
+        struct node* node_var = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
+        CHECK_NODE(node_var);
+
+        *root = node_var;
+        return 0;
     }
 
-    if (current_token->code != TOK_INT && current_token->code != TOK_IDN) {
-        ERROR("expected token code: int or identifier, got token: %s", rev_tokens[current_token->code]);
-        return 1;
-    }
-
-    struct node* node_num = node_new(current_token->code == TOK_INT ? NODE_NUMBER : NODE_VAR, current_token, NULL, NULL, parser->current_scope);
-    CHECK_NODE(node_num);
-
-    // eat current token
-    advance();
-
-    *root = node_num;
-
-    return 0;
+    ERROR("unexpected token %s", rev_tokens[current_token->code]);
+    return 1;
 }
 
 static int parse_term(struct parser* parser, struct node** root) {
@@ -140,6 +146,17 @@ static int parse_expression(struct parser* parser, struct node** root) {
 
     *root = left;
 
+    return 0;
+}
+
+static int parse_expression_statement(struct parser* parser, struct node** root) {
+    struct node* expression;
+    CHECK(parse_expression(parser, &expression), "Failed to pare expression");
+
+    struct node* expression_statement_node = node_new(NODE_EXP_STATEMENT, NULL, expression, NULL, parser->current_scope);
+    CHECK_NODE(expression_statement_node);
+
+    *root = expression_statement_node;
     return 0;
 }
 
@@ -376,20 +393,12 @@ static int parse_statement(struct parser* parser, struct node** root ) {
         return 0;
     }
 
-    if (current_token_code == TOK_IDN) {
-        if (parser->tokens[(parser->current_index) + 1].code == TOK_EQL) {
-            CHECK(parse_assignment(parser, root), "failed to parse assignment");
-            return 0;
-        }
-
-        if (parser->tokens[(parser->current_index) + 1].code == TOK_LPR) {
-            CHECK(parse_function_call(parser, root), "failed to parse function call");
-            return 0;
-        }
+    if (current_token_code == TOK_IDN && next_token()->code == TOK_EQL) {
+        CHECK(parse_assignment(parser, root), "failed to parse assignment");
+        return 0;
     }
 
-    CHECK(parse_expression(parser, root), "failed to parse expression");
-
+    CHECK(parse_expression_statement(parser, root), "failed to parse expression statement");
     return 0;
 }
 

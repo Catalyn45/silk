@@ -86,7 +86,7 @@ static void add_function(const char* function_name, uint32_t n_parameters, uint3
 
 #define add_number(num) \
 { \
-    int32_t int_value = (int32_t)num; \
+    int32_t int_value = (int32_t)(num); \
     memcpy(&bytes[*n_bytes], &int_value, sizeof(int_value)); \
     (*n_bytes) += sizeof(num); \
 }
@@ -104,8 +104,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                memcpy(&bytes[*n_bytes], ast->token->value, sizeof(uint32_t));
-                (*n_bytes) += sizeof(uint32_t);
+                memcpy(&bytes[*n_bytes], ast->token->value, sizeof(int32_t));
+                (*n_bytes) += sizeof(int32_t);
 
                 return 0;
             }
@@ -377,6 +377,13 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     add_instruction(POP);
 
                 add_instruction(RET);
+
+                return 0;
+            }
+        case NODE_EXP_STATEMENT:
+            {
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
+                add_instruction(POP);
 
                 return 0;
             }
