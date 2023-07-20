@@ -184,7 +184,7 @@ static int parse_equality(struct parser* parser, struct node** root) {
     CHECK(parse_relational(parser, &left), "failed to parse relational");
 
     const struct token_entry* current_token = get_token();
-    while (current_token->code == TOK_EQL || current_token->code == TOK_DEQ) {
+    while (current_token->code == TOK_DEQ || current_token->code == TOK_NEQ) {
         // eat current token
         advance();
 
