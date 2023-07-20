@@ -20,6 +20,7 @@ extern const char* rev_tokens[];
 #define EXPECT_TOKEN(token, expected_token) \
     if (token != expected_token) { \
         ERROR("expected token %s, got token %s", rev_tokens[expected_token], rev_tokens[token]); \
+        return 1; \
     }
 
 #define CHECK(result, message, ...) \

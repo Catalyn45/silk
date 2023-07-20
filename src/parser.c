@@ -273,7 +273,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = argument_list->right;
+    *root = argument_list ? argument_list->right : NULL;
     return 0;
 }
 
@@ -328,7 +328,7 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
     // eat right par
     advance();
 
-    *root = parameter_list->left;
+    *root = parameter_list ? parameter_list->left : NULL;
     return 0;
 }
 
@@ -438,8 +438,10 @@ static int parse_block(struct parser* parser, struct node** root, bool brackets)
         current_token = get_token();
     }
 
-    free(statement->right);
-    statement->right = NULL;
+    if (statement) {
+        free(statement->right);
+        statement->right = NULL;
+    }
 
     if (brackets) {
         EXPECT_TOKEN(current_token->code, TOK_RBR);
