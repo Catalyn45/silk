@@ -54,6 +54,16 @@ static int parse_primary(struct parser* parser, struct node** root) {
         return 0;
     }
 
+    if (current_token->code == TOK_STR) {
+        advance();
+
+        struct node* node_num = node_new(NODE_STRING, current_token, NULL, NULL, parser->current_scope);
+        CHECK_NODE(node_num);
+
+        *root = node_num;
+        return 0;
+    }
+
     if (current_token->code == TOK_IDN) {
         if (next_token()->code == TOK_LPR) {
             CHECK(parse_function_call(parser, root), "failed to parse function call");

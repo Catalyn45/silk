@@ -70,6 +70,31 @@ static struct function* get_function(const char* function_name, struct evaluator
     return NULL;
 }
 
+static int32_t add_constant(struct binary_data* data, const struct object* o) {
+    uint32_t constant_address = data->n_constants_bytes;
+
+    *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->type;
+    data->n_constants_bytes += sizeof(int32_t);
+
+    if (o->type == NUMBER) {
+        *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = *(int32_t*)o->value;
+        data->n_constants_bytes += sizeof(int32_t);
+        return constant_address;
+    }
+
+    if (o->type == STRING) {
+        strcpy((char*)&data->constants_bytes[data->n_constants_bytes], o->value);
+        data->n_constants_bytes += strlen(o->value);
+
+        data->constants_bytes[data->n_constants_bytes] = '\0';
+        ++data->n_constants_bytes;
+
+        return constant_address;
+    }
+
+    return -1;
+}
+
 static void add_function(const char* function_name, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
     e->functions[e->n_functions++] = (struct function) {
         .name = function_name,
@@ -104,8 +129,17 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                memcpy(&bytes[*n_bytes], ast->token->value, sizeof(int32_t));
-                (*n_bytes) += sizeof(int32_t);
+                int32_t constant_address = add_constant(data, &(struct object){.type = NUMBER, .value = ast->token->value});
+                add_number(constant_address);
+
+                return 0;
+            }
+        case NODE_STRING:
+            {
+                add_instruction(PUSH);
+
+                int32_t constant_address = add_constant(data, &(struct object){.type = STRING, .value = ast->token->value});
+                add_number(constant_address);
 
                 return 0;
             }
@@ -353,14 +387,16 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 }
 
                 add_instruction(CALL);
-                add_number(f->index);
+
+                int32_t constant_address = add_constant(data, &(struct object){.type = NUMBER, .value = &f->index});
+                add_number(constant_address);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
                     add_instruction(POP);
                 }
 
                 add_instruction(DUP_ABS);
-                add_number(RETURN_INDEX);
+                add_number(0);
 
                 return 0;
             }
@@ -370,7 +406,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
 
                 add_instruction(CHANGE_ABS);
-                add_number(RETURN_INDEX);
+                add_number(0);
 
                 uint32_t n_cleaned = get_var_count(0, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i)
@@ -395,42 +431,63 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
     return 0;
 }
 
+#define program_counter \
+    vm->program_counter
+
 #define stack_base \
-    vm->stack[STACK_BASE_INDEX]
+    vm->stack_base
 
 #define stack_size \
-    vm->stack[STACK_SIZE_INDEX]
+    vm->stack_size
 
 #define return_value \
-    vm->stack[RETURN_INDEX]
-
-#define program_counter \
-    vm->stack[PROGRAM_COUNTER]
+    vm->stack[0]
 
 #define read_value(value_type) \
     (*((value_type*)(vm->bytes + program_counter + 1)))
 
-#define push(value) \
-    vm->stack[stack_size++] = value
+void push_constant(struct vm* vm, int32_t address) {
+    int type = *((int32_t*)&vm->bytes[address]);
+    address += sizeof(int32_t);
+
+    void* value = &vm->bytes[address];
+    vm->stack[stack_size++] = (struct object){.type = type, .value = value};
+}
+
+void push_number(struct vm* vm, int32_t number) {
+    vm->stack[stack_size++] = (struct object){.type = number, .value = (void*)((size_t)number)};
+}
+
+#define push(o) \
+    vm->stack[stack_size++] = o
 
 #define pop() \
-    vm->stack[--stack_size]
+    (&vm->stack[--stack_size])
+
+int32_t pop_number(struct vm* vm) {
+    struct object* obj = pop();
+    return *((int32_t*)&obj->value);
+}
+
+const char* pop_string(struct vm* vm) {
+    struct object* obj = pop();
+    return (const char*)obj->value;
+}
 
 int execute(struct vm* vm) {
-    // 0 - stack size
-    // 1 - stack base
-    // 2 - return value
-    // 3 - program counter
+    // 0 - return value
 
-    stack_size = 4;
-    stack_base = 4;
-    program_counter = 0;
+    stack_size = 1;
+    stack_base = 1;
+
+    int32_t start_address = *(int32_t*)vm->bytes;
+    program_counter = start_address;
 
     while (!vm->halt && program_counter < vm->n_bytes) {
         switch (vm->bytes[program_counter]) {
             case PUSH:
-                push(read_value(int32_t));
-                program_counter += sizeof(uint32_t);
+                push_constant(vm, read_value(int32_t));
+                program_counter += sizeof(int32_t);
                 break;
 
             case POP:
@@ -439,115 +496,122 @@ int execute(struct vm* vm) {
 
             case ADD:
                 {
-                    uint32_t number1 = pop();
-                    uint32_t number2 = pop();
-                    push(number1 + number2);
+                    uint32_t number1 = pop_number(vm);
+                    uint32_t number2 = pop_number(vm);
+                    push_number(vm, number1 + number2);
                 }
                 break;
 
             case MIN:
                 {
-                    uint32_t number1 = pop();
-                    uint32_t number2 = pop();
-                    push(number1 - number2);
+                    uint32_t number1 = pop_number(vm);
+                    uint32_t number2 = pop_number(vm);
+                    push_number(vm, number1 - number2);
                 }
                 break;
 
             case MUL:
                 {
-                    uint32_t number1 = pop();
-                    uint32_t number2 = pop();
-                    push(number1 * number2);
+                    uint32_t number1 = pop_number(vm);
+                    uint32_t number2 = pop_number(vm);
+                    push_number(vm, number1 * number2);
                 }
                 break;
 
             case DIV:
                 {
-                    uint32_t number1 = pop();
-                    uint32_t number2 = pop();
-                    push(number1 / number2);
+                    uint32_t number1 = pop_number(vm);
+                    uint32_t number2 = pop_number(vm);
+                    push_number(vm, number1 / number2);
                 }
                 break;
 
             case NOT:
                 {
-                    uint32_t exp = pop();
+                    uint32_t exp = pop_number(vm);
                     if (exp) {
-                        push(0);
+                        push_number(vm, 0);
                     } else {
-                        push(1);
+                        push_number(vm, 1);
                     }
                 }
                 break;
 
             case DEQ:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 == exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 == exp2) ? 1 : 0);
                 }
                 break;
 
             case NEQ:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 != exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 != exp2) ? 1 : 0);
                 }
                 break;
 
             case GRE:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 > exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 > exp2) ? 1 : 0);
                 }
                 break;
 
             case GRQ:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 >= exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 >= exp2) ? 1 : 0);
                 }
                 break;
 
             case LES:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 < exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 < exp2) ? 1 : 0);
                 }
                 break;
 
             case LEQ:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 <= exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 <= exp2) ? 1 : 0);
                 }
                 break;
 
             case AND:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 && exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 && exp2) ? 1 : 0);
                 }
                 break;
 
             case OR:
                 {
-                    uint32_t exp1 = pop();
-                    uint32_t exp2 = pop();
-                    push((exp1 || exp2) ? 1 : 0);
+                    uint32_t exp1 = pop_number(vm);
+                    uint32_t exp2 = pop_number(vm);
+                    push_number(vm, (exp1 || exp2) ? 1 : 0);
                 }
                 break;
 
             case PRINT:
                 {
-                    uint32_t number = pop();
-                    printf("%d\n", number);
+                    struct object* o = pop();
+
+                    if (o->type == NUMBER) {
+                        int32_t number = (int32_t)(size_t)o->value;
+                        printf("%d\n", number);
+                    } else if (o->type == STRING) {
+                        const char* string = o->value;
+                        printf("%s\n", string);
+                    }
                 }
                 break;
 
@@ -568,20 +632,20 @@ int execute(struct vm* vm) {
             case CHANGE:
                 {
                     int32_t index = read_value(int32_t);
-                    vm->stack[stack_base + index] = pop();
+                    vm->stack[stack_base + index] = *pop();
                     program_counter += sizeof(index);
                 }
                 break;
             case CHANGE_ABS:
                 {
                     int32_t index = read_value(int32_t);
-                    vm->stack[index] = pop();
+                    vm->stack[index] = *pop();
                     program_counter += sizeof(index);
                 }
                 break;
             case JMP_NOT:
                 {
-                    uint32_t condition = pop();
+                    uint32_t condition = pop_number(vm);
                     int32_t index = read_value(int32_t);
 
                     if (!condition) {
@@ -604,19 +668,19 @@ int execute(struct vm* vm) {
                     uint32_t old_base = stack_base;
                     stack_base = stack_size;
 
-                    push(program_counter + 1 + sizeof(int32_t));
+                    push_number(vm, program_counter + 1 + sizeof(int32_t));
 
                     int32_t index = read_value(int32_t);
                     program_counter = index - 1;
 
-                    push(old_base);
+                    push_number(vm, old_base);
                 }
                 break;
 
             case RET:
                 {
-                    stack_base = pop();
-                    uint32_t index = pop();
+                    stack_base = pop_number(vm);
+                    uint32_t index = pop_number(vm);
 
                     program_counter = index - 1;
                 }

@@ -6,20 +6,21 @@
 
 enum node_type {
     NODE_NUMBER = 0,
-    NODE_BINARY_OP = 1,
-    NODE_IF = 2,
-    NODE_WHILE = 3,
-    NODE_ASSIGN = 4,
-    NODE_STATEMENT = 5,
-    NODE_VAR = 6,
-    NODE_FUNCTION_CALL = 7,
-    NODE_NOT = 8,
-    NODE_FUNCTION = 9,
-    NODE_DECISION = 10,
-    NODE_PARAMETER = 11,
-    NODE_ARGUMENT = 12,
-    NODE_RETURN = 13,
-    NODE_EXP_STATEMENT = 14
+    NODE_STRING = 1,
+    NODE_BINARY_OP = 2,
+    NODE_IF = 3,
+    NODE_WHILE = 4,
+    NODE_ASSIGN = 5,
+    NODE_STATEMENT = 6,
+    NODE_VAR = 7,
+    NODE_FUNCTION_CALL = 8,
+    NODE_NOT = 9,
+    NODE_FUNCTION = 10,
+    NODE_DECISION = 11,
+    NODE_PARAMETER = 12,
+    NODE_ARGUMENT = 13,
+    NODE_RETURN = 14,
+    NODE_EXP_STATEMENT = 15
 };
 
 struct parser {

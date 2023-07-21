@@ -46,6 +46,17 @@ struct function {
     uint32_t index;
 };
 
+
+enum object_type {
+    NUMBER = 0,
+    STRING = 1
+};
+
+struct object {
+    int32_t type;
+    void* value;
+};
+
 struct evaluator {
     struct var constants[1024];
     uint32_t n_constants;
@@ -73,21 +84,19 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
 struct vm {
     uint32_t globals[2048];
-    uint32_t stack[2048];
+    struct object stack[2048];
 
     uint8_t* bytes;
     uint32_t n_bytes;
+
+    uint32_t stack_size;
+    uint32_t stack_base;
+    uint32_t program_counter;
+    uint32_t return_register;
 
     bool halt;
 };
 
 int execute(struct vm* vm);
-
-enum predefined_indexes {
-    STACK_SIZE_INDEX = 0,
-    STACK_BASE_INDEX = 1,
-    RETURN_INDEX = 2,
-    PROGRAM_COUNTER = 3
-};
 
 #endif

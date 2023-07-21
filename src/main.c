@@ -105,13 +105,25 @@ int main(int argc, char* argv[]) {
     uint32_t n_bytes = 0;
 
     struct evaluator e = {};
-    struct binary_data d = {};
+    struct binary_data d = {.n_constants_bytes = sizeof(int32_t)};
     uint32_t current_stack_index = 0;
 
     if (evaluate(ast, bytes, &n_bytes, &d, &current_stack_index, &e) != 0) {
         ERROR("failed to evaluate");
         return 1;
     }
+
+    uint8_t bytecode[4096];
+    uint32_t n_bytecodes = 0;
+
+    memcpy(bytecode, d.constants_bytes, d.n_constants_bytes);
+    n_bytecodes += d.n_constants_bytes;
+
+    // program start address
+    *((int32_t*)bytecode) = n_bytecodes;
+
+    memcpy(bytecode + n_bytecodes, bytes, n_bytes);
+    n_bytecodes += n_bytes;
 
     if (print_bytecode) {
         disassembly(bytes, n_bytes);
@@ -120,8 +132,8 @@ int main(int argc, char* argv[]) {
 
     if (execute_program) {
         struct vm vm = {
-            .bytes = bytes,
-            .n_bytes = n_bytes,
+            .bytes = bytecode,
+            .n_bytes = n_bytecodes,
         };
 
         if (execute(&vm) != 0) {

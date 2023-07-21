@@ -38,6 +38,7 @@ const char* rev_tokens[] = {
 
 static const char* rev_node[] = {
     "NUMBER",
+    "STRING",
     "BINARY_OP",
     "IF",
     "WHILE",
