@@ -76,13 +76,13 @@ static int32_t add_constant(struct binary_data* data, const struct object* o) {
     *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->type;
     data->n_constants_bytes += sizeof(int32_t);
 
-    if (o->type == NUMBER) {
+    if (o->type == OBJ_NUMBER) {
         *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = *(int32_t*)o->value;
         data->n_constants_bytes += sizeof(int32_t);
         return constant_address;
     }
 
-    if (o->type == STRING) {
+    if (o->type == OBJ_STRING) {
         strcpy((char*)&data->constants_bytes[data->n_constants_bytes], o->value);
         data->n_constants_bytes += strlen(o->value);
 
@@ -129,7 +129,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                int32_t constant_address = add_constant(data, &(struct object){.type = NUMBER, .value = ast->token->value});
+                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_NUMBER, .value = ast->token->value});
                 add_number(constant_address);
 
                 return 0;
@@ -138,7 +138,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                int32_t constant_address = add_constant(data, &(struct object){.type = STRING, .value = ast->token->value});
+                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_STRING, .value = ast->token->value});
                 add_number(constant_address);
 
                 return 0;
@@ -451,10 +451,10 @@ void push_constant(struct vm* vm, int32_t address) {
     address += sizeof(int32_t);
 
     void* value;
-    if (type == NUMBER) {
+    if (type == OBJ_NUMBER) {
         int32_t number = *((int32_t*)&vm->bytes[address]);
         value = (void*)(size_t)number;
-    } else if (type == STRING) {
+    } else if (type == OBJ_STRING) {
         value = &vm->bytes[address];
     } else {
         return;
@@ -465,11 +465,15 @@ void push_constant(struct vm* vm, int32_t address) {
 }
 
 void push_number(struct vm* vm, int32_t number) {
-    vm->stack[stack_size++] = (struct object){.type = NUMBER, .value = (void*)((size_t)number)};
+    vm->stack[stack_size++] = (struct object){.type = OBJ_NUMBER, .value = (void*)((size_t)number)};
 }
 
 void push_string(struct vm* vm, char* string) {
-    vm->stack[stack_size++] = (struct object){.type = STRING, .value = string};
+    vm->stack[stack_size++] = (struct object){.type = OBJ_STRING, .value = string};
+}
+
+void push_bool(struct vm* vm, bool value) {
+    vm->stack[stack_size++] = (struct object){.type = OBJ_NUMBER, .value = (void*)((size_t)value)};
 }
 
 #define push(o) \
@@ -486,6 +490,11 @@ int32_t pop_number(struct vm* vm) {
 const char* pop_string(struct vm* vm) {
     struct object* obj = pop();
     return (const char*)obj->value;
+}
+
+bool pop_bool(struct vm* vm) {
+    struct object* obj = pop();
+    return (bool)(size_t)obj->value;
 }
 
 int execute(struct vm* vm) {
@@ -513,11 +522,11 @@ int execute(struct vm* vm) {
                     struct object* value1 = pop();
                     struct object* value2 = pop();
 
-                    if (value1->type == STRING || value2->type == STRING) {
+                    if (value1->type == OBJ_STRING || value2->type == OBJ_STRING) {
                         char* new_string = malloc(500);
                         uint32_t n_new_string = 0;
 
-                        if (value1->type == NUMBER) {
+                        if (value1->type == OBJ_NUMBER) {
                             int32_t number = (int32_t)(size_t)value1->value;
                             n_new_string += sprintf(new_string, "%d", number);
                         } else {
@@ -525,7 +534,7 @@ int execute(struct vm* vm) {
                             n_new_string += strlen(value1->value);
                         }
 
-                        if (value2->type == NUMBER) {
+                        if (value2->type == OBJ_NUMBER) {
                             int32_t number = (int32_t)(size_t)value2->value;
                             n_new_string += sprintf(new_string + n_new_string, "%d", number);
                         } else {
@@ -570,11 +579,11 @@ int execute(struct vm* vm) {
 
             case NOT:
                 {
-                    uint32_t exp = pop_number(vm);
+                    uint32_t exp = pop_bool(vm);
                     if (exp) {
-                        push_number(vm, 0);
+                        push_bool(vm, false);
                     } else {
-                        push_number(vm, 1);
+                        push_bool(vm, true);
                     }
                 }
                 break;
@@ -583,7 +592,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = pop_number(vm);
                     uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 == exp2) ? 1 : 0);
+                    push_bool(vm, exp1 == exp2);
                 }
                 break;
 
@@ -591,7 +600,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = pop_number(vm);
                     uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 != exp2) ? 1 : 0);
+                    push_bool(vm, exp1 != exp2);
                 }
                 break;
 
@@ -599,7 +608,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = pop_number(vm);
                     uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 > exp2) ? 1 : 0);
+                    push_bool(vm, exp1 > exp2);
                 }
                 break;
 
@@ -607,7 +616,7 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = pop_number(vm);
                     uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 >= exp2) ? 1 : 0);
+                    push_bool(vm, exp1 >= exp2);
                 }
                 break;
 
@@ -615,31 +624,31 @@ int execute(struct vm* vm) {
                 {
                     uint32_t exp1 = pop_number(vm);
                     uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 < exp2) ? 1 : 0);
+                    push_bool(vm, exp1 < exp2);
                 }
                 break;
 
             case LEQ:
                 {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 <= exp2) ? 1 : 0);
+                    bool exp1 = pop_number(vm);
+                    bool exp2 = pop_number(vm);
+                    push_bool(vm, exp1 <= exp2);
                 }
                 break;
 
             case AND:
                 {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 && exp2) ? 1 : 0);
+                    bool exp1 = pop_bool(vm);
+                    bool exp2 = pop_bool(vm);
+                    push_bool(vm, exp1 && exp2);
                 }
                 break;
 
             case OR:
                 {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_number(vm, (exp1 || exp2) ? 1 : 0);
+                    bool exp1 = pop_bool(vm);
+                    bool exp2 = pop_bool(vm);
+                    push_bool(vm, exp1 || exp2);
                 }
                 break;
 
@@ -647,10 +656,10 @@ int execute(struct vm* vm) {
                 {
                     struct object* o = pop();
 
-                    if (o->type == NUMBER) {
+                    if (o->type == OBJ_NUMBER) {
                         int32_t number = (int32_t)(size_t)o->value;
                         printf("%d\n", number);
-                    } else if (o->type == STRING) {
+                    } else if (o->type == OBJ_STRING) {
                         const char* string = o->value;
                         printf("%s\n", string);
                     }

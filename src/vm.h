@@ -48,8 +48,9 @@ struct function {
 
 
 enum object_type {
-    NUMBER = 0,
-    STRING = 1
+    OBJ_NUMBER = 0,
+    OBJ_STRING = 1,
+    OBJ_BOOL = 2
 };
 
 struct object {
