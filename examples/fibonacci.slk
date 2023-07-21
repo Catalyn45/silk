@@ -17,5 +17,6 @@ def fibonacci(n) {
     return b
 }
 
-print(fibonacci(10))
+n = 10
+print(n + "th fibonacci number is: " + fibonacci(n))
 

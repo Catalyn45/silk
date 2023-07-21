@@ -359,8 +359,10 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 const char* function_name = ast->token->value;
                 if (strcmp(function_name, "print") == 0) {
                     CHECK(evaluate(ast->left->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate print argument");
-
                     add_instruction(PRINT);
+
+                    add_instruction(DUP_ABS);
+                    add_number(0);
 
                     return 0;
                 }
@@ -387,9 +389,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 }
 
                 add_instruction(CALL);
-
-                int32_t constant_address = add_constant(data, &(struct object){.type = NUMBER, .value = &f->index});
-                add_number(constant_address);
+                add_number(f->index);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
                     add_instruction(POP);
@@ -450,12 +450,26 @@ void push_constant(struct vm* vm, int32_t address) {
     int type = *((int32_t*)&vm->bytes[address]);
     address += sizeof(int32_t);
 
-    void* value = &vm->bytes[address];
+    void* value;
+    if (type == NUMBER) {
+        int32_t number = *((int32_t*)&vm->bytes[address]);
+        value = (void*)(size_t)number;
+    } else if (type == STRING) {
+        value = &vm->bytes[address];
+    } else {
+        return;
+    }
+
+
     vm->stack[stack_size++] = (struct object){.type = type, .value = value};
 }
 
 void push_number(struct vm* vm, int32_t number) {
-    vm->stack[stack_size++] = (struct object){.type = number, .value = (void*)((size_t)number)};
+    vm->stack[stack_size++] = (struct object){.type = NUMBER, .value = (void*)((size_t)number)};
+}
+
+void push_string(struct vm* vm, char* string) {
+    vm->stack[stack_size++] = (struct object){.type = STRING, .value = string};
 }
 
 #define push(o) \
@@ -466,7 +480,7 @@ void push_number(struct vm* vm, int32_t number) {
 
 int32_t pop_number(struct vm* vm) {
     struct object* obj = pop();
-    return *((int32_t*)&obj->value);
+    return (int32_t)(size_t)obj->value;
 }
 
 const char* pop_string(struct vm* vm) {
@@ -496,8 +510,36 @@ int execute(struct vm* vm) {
 
             case ADD:
                 {
-                    uint32_t number1 = pop_number(vm);
-                    uint32_t number2 = pop_number(vm);
+                    struct object* value1 = pop();
+                    struct object* value2 = pop();
+
+                    if (value1->type == STRING || value2->type == STRING) {
+                        char* new_string = malloc(500);
+                        uint32_t n_new_string = 0;
+
+                        if (value1->type == NUMBER) {
+                            int32_t number = (int32_t)(size_t)value1->value;
+                            n_new_string += sprintf(new_string, "%d", number);
+                        } else {
+                            strcpy(new_string, value1->value);
+                            n_new_string += strlen(value1->value);
+                        }
+
+                        if (value2->type == NUMBER) {
+                            int32_t number = (int32_t)(size_t)value2->value;
+                            n_new_string += sprintf(new_string + n_new_string, "%d", number);
+                        } else {
+                            strcpy(new_string + n_new_string, value2->value);
+                            n_new_string += strlen(value2->value);
+                        }
+
+                        push_string(vm, new_string);
+                        break;
+                    }
+
+                    int32_t number1 = (int32_t)(size_t)value1->value;
+                    int32_t number2 = (int32_t)(size_t)value2->value;
+
                     push_number(vm, number1 + number2);
                 }
                 break;
@@ -649,7 +691,7 @@ int execute(struct vm* vm) {
                     int32_t index = read_value(int32_t);
 
                     if (!condition) {
-                        program_counter = index - 1;
+                        program_counter = start_address + index - 1;
                     } else {
                         program_counter += sizeof(index);
                     }
@@ -659,7 +701,7 @@ int execute(struct vm* vm) {
             case JMP:
                 {
                     int32_t index = read_value(int32_t);
-                    program_counter = index - 1;
+                    program_counter = start_address + index - 1;
                 }
                 break;
 
@@ -671,7 +713,7 @@ int execute(struct vm* vm) {
                     push_number(vm, program_counter + 1 + sizeof(int32_t));
 
                     int32_t index = read_value(int32_t);
-                    program_counter = index - 1;
+                    program_counter = start_address + index - 1;
 
                     push_number(vm, old_base);
                 }

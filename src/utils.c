@@ -83,7 +83,8 @@ static const char* rev_instruction[] = {
 };
 
 void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
-    for (uint32_t i = 0; i < n_bytes; ++i) {
+    int32_t start_address = *(int32_t*)bytes;
+    for (uint32_t i = start_address; i < n_bytes; ++i) {
         printf("%-3d : %s", i, rev_instruction[bytes[i]]);
 
         switch (bytes[i]) {
@@ -92,10 +93,14 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
             case DUP_ABS:
             case CHANGE:
             case CHANGE_ABS:
+                printf(" %d", *((uint32_t*)&bytes[i + 1]));
+                i += sizeof(uint32_t);
+                break;
+
             case JMP_NOT:
             case JMP:
             case CALL:
-                printf(" %d", *((uint32_t*)&bytes[i + 1]));
+                printf(" %d", start_address + *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;
         }

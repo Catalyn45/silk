@@ -23,7 +23,7 @@ Just use `make sylk`. The project have no dependencies.
 - [x] function calls
 - [x] logical operations
 - [x] function defenitions
-- [ ] string support
+- [x] string support
 - [ ] list data structure
 - [ ] standard library
 

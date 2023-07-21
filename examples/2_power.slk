@@ -9,4 +9,6 @@ def power_2(k) {
     return power
 }
 
-print(power_2(10))
+n = 10
+print("2 to the power of " + n + " is: " + power_2(n))
+

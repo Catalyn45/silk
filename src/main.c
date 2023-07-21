@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
     n_bytecodes += n_bytes;
 
     if (print_bytecode) {
-        disassembly(bytes, n_bytes);
+        disassembly(bytecode, n_bytecodes);
         puts("");
     }
 
