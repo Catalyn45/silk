@@ -97,6 +97,7 @@ static int32_t add_constant(struct binary_data* data, const struct object* o) {
 
 static void add_function(const char* function_name, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
     e->functions[e->n_functions++] = (struct function) {
+        .type = USER,
         .name = function_name,
         .n_parameters = n_parameters,
         .index = index
@@ -118,6 +119,11 @@ static void add_function(const char* function_name, uint32_t n_parameters, uint3
 
 #define increment_index() \
     ++(*current_stack_index)
+
+int initialize_evaluator(struct evaluator* e) {
+    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "print", .n_parameters = 1, .index = 0};
+    return 0;
+};
 
 int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e) {
     if (ast == NULL) {
@@ -300,7 +306,6 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 add_number(position);
 
                 return 0;
-
             }
         case NODE_STATEMENT:
             {
@@ -357,19 +362,9 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
         case NODE_FUNCTION_CALL:
             {
                 const char* function_name = ast->token->value;
-                if (strcmp(function_name, "print") == 0) {
-                    CHECK(evaluate(ast->left->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate print argument");
-                    add_instruction(PRINT);
-
-                    add_instruction(DUP_ABS);
-                    add_number(0);
-
-                    return 0;
-                }
-
                 struct function* f = get_function(function_name, e);
                 if (!f) {
-                    ERROR("function not definited");
+                    ERROR("function not definited: %s", function_name);
                     return 1;
                 }
 
@@ -388,7 +383,11 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     CHECK(evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function: %s argument", function_name);
                 }
 
-                add_instruction(CALL);
+                if (f->type == USER) {
+                    add_instruction(CALL);
+                } else {
+                    add_instruction(CALL_BUILTIN);
+                }
                 add_number(f->index);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
@@ -482,6 +481,9 @@ void push_bool(struct vm* vm, bool value) {
 #define pop() \
     (&vm->stack[--stack_size])
 
+#define peek(n) \
+    (&vm->stack[stack_size - 1 - n])
+
 int32_t pop_number(struct vm* vm) {
     struct object* obj = pop();
     return (int32_t)(size_t)obj->value;
@@ -496,6 +498,26 @@ bool pop_bool(struct vm* vm) {
     struct object* obj = pop();
     return (bool)(size_t)obj->value;
 }
+
+typedef struct object (*builtin_fun)(struct vm* vm);
+
+static struct object print_object(struct vm* vm) {
+    struct object* o = peek(0);
+
+    if (o->type == OBJ_NUMBER) {
+        int32_t number = (int32_t)(size_t)o->value;
+        printf("%d\n", number);
+    } else if (o->type == OBJ_STRING) {
+        const char* string = o->value;
+        printf("%s\n", string);
+    }
+
+    return (struct object){};
+}
+
+static builtin_fun builtin_functions[] = {
+    print_object
+};
 
 int execute(struct vm* vm) {
     // 0 - return value
@@ -652,20 +674,6 @@ int execute(struct vm* vm) {
                 }
                 break;
 
-            case PRINT:
-                {
-                    struct object* o = pop();
-
-                    if (o->type == OBJ_NUMBER) {
-                        int32_t number = (int32_t)(size_t)o->value;
-                        printf("%d\n", number);
-                    } else if (o->type == OBJ_STRING) {
-                        const char* string = o->value;
-                        printf("%s\n", string);
-                    }
-                }
-                break;
-
             case DUP:
                 {
                     int32_t index = read_value(int32_t);
@@ -728,6 +736,16 @@ int execute(struct vm* vm) {
                 }
                 break;
 
+            case CALL_BUILTIN:
+                {
+                    int32_t index = read_value(int32_t);
+                    program_counter += sizeof(index);
+
+                    struct object return_object = builtin_functions[index](vm);
+                    return_value = return_object;
+
+                }
+                break;
             case RET:
                 {
                     stack_base = pop_number(vm);

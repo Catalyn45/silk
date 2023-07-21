@@ -73,12 +73,12 @@ static const char* rev_instruction[] = {
     "OR",
     "DUP",
     "DUP_ABS",
-    "PRINT",
     "CHANGE",
     "CHANGE_ABS",
     "JMP_NOT",
     "JMP",
     "CALL",
+    "CALL_BUILTIN",
     "RET"
 };
 
@@ -100,6 +100,7 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
             case JMP_NOT:
             case JMP:
             case CALL:
+            case CALL_BUILTIN:
                 printf(" %d", start_address + *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;

@@ -23,12 +23,12 @@ enum instructions {
     OR,
     DUP,
     DUP_ABS,
-    PRINT,
     CHANGE,
     CHANGE_ABS,
     JMP_NOT,
     JMP,
     CALL,
+    CALL_BUILTIN,
     RET
 };
 
@@ -39,7 +39,13 @@ struct var {
     int32_t stack_index;
 };
 
+enum function_type {
+    USER,
+    BUILT_IN
+};
+
 struct function {
+    int type;
     const char* name;
 
     uint32_t n_parameters;
@@ -81,6 +87,7 @@ struct binary_data {
     uint32_t n_program_bytes;
 };
 
+int initialize_evaluator(struct evaluator* e);
 int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
 
 struct vm {

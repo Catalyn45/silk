@@ -108,6 +108,8 @@ int main(int argc, char* argv[]) {
     struct binary_data d = {.n_constants_bytes = sizeof(int32_t)};
     uint32_t current_stack_index = 0;
 
+    initialize_evaluator(&e);
+
     if (evaluate(ast, bytes, &n_bytes, &d, &current_stack_index, &e) != 0) {
         ERROR("failed to evaluate");
         return 1;
