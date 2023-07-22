@@ -122,6 +122,9 @@ static void add_function(const char* function_name, uint32_t n_parameters, uint3
 
 int initialize_evaluator(struct evaluator* e) {
     e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "print", .n_parameters = 1, .index = 0};
+    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_number", .n_parameters = 1, .index = 1};
+    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_string", .n_parameters = 1, .index = 2};
+
     return 0;
 };
 
@@ -515,8 +518,34 @@ static struct object print_object(struct vm* vm) {
     return (struct object){};
 }
 
+static struct object input_number(struct vm* vm) {
+    struct object* o = peek(0);
+    const char* input_text = o->value;
+
+    printf("%s", input_text);
+    int32_t number;
+    scanf("%d", &number);
+    puts("");
+
+    return (struct object){.type = OBJ_NUMBER, .value = (void*)(size_t)number};
+};
+
+static struct object input_string(struct vm* vm) {
+    struct object* o = peek(0);
+    const char* input_text = o->value;
+
+    printf("%s", input_text);
+    char* string = NULL;
+    scanf("%s", string);
+    puts("");
+
+    return (struct object){.type = OBJ_STRING, .value = string};
+}
+
 static builtin_fun builtin_functions[] = {
-    print_object
+    print_object,
+    input_number,
+    input_string
 };
 
 int execute(struct vm* vm) {

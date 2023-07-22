@@ -17,6 +17,6 @@ def fibonacci(n) {
     return b
 }
 
-n = 10
+n = input_number("insert n number to compute: ")
 print(n + "th fibonacci number is: " + fibonacci(n))
 
