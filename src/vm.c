@@ -77,14 +77,14 @@ static int32_t add_constant(struct binary_data* data, const struct object* o) {
     data->n_constants_bytes += sizeof(int32_t);
 
     if (o->type == OBJ_NUMBER) {
-        *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = *(int32_t*)o->value;
+        *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->int_value;
         data->n_constants_bytes += sizeof(int32_t);
         return constant_address;
     }
 
     if (o->type == OBJ_STRING) {
-        strcpy((char*)&data->constants_bytes[data->n_constants_bytes], o->value);
-        data->n_constants_bytes += strlen(o->value);
+        strcpy((char*)&data->constants_bytes[data->n_constants_bytes], o->str_value);
+        data->n_constants_bytes += strlen(o->str_value);
 
         data->constants_bytes[data->n_constants_bytes] = '\0';
         ++data->n_constants_bytes;
@@ -120,8 +120,16 @@ static void add_function(const char* function_name, uint32_t n_parameters, uint3
 #define increment_index() \
     ++(*current_stack_index)
 
+#define create_placeholder() \
+    *n_bytes; (*n_bytes) += sizeof(uint32_t)
+
+#define patch_placeholder(placeholder) \
+    { \
+        memcpy(&bytes[placeholder], n_bytes, sizeof(*n_bytes)); \
+    } \
+
 int initialize_evaluator(struct evaluator* e) {
-    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "print", .n_parameters = 1, .index = 0};
+    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "print",        .n_parameters = 1, .index = 0};
     e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_number", .n_parameters = 1, .index = 1};
     e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_string", .n_parameters = 1, .index = 2};
 
@@ -138,7 +146,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_NUMBER, .value = ast->token->value});
+                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_NUMBER, .int_value = *(int32_t*)ast->token->value});
                 add_number(constant_address);
 
                 return 0;
@@ -147,7 +155,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_STRING, .value = ast->token->value});
+                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value});
                 add_number(constant_address);
 
                 return 0;
@@ -227,35 +235,35 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate expression in if statement");
 
                 add_instruction(JMP_NOT);
-
-                uint32_t placeholder_true_index = *n_bytes;
-                (*n_bytes) += sizeof(placeholder_true_index);
+                uint32_t placeholder_true = create_placeholder();
 
                 // true
                 CHECK(evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate \"true\" side in if statement");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i)
+                for (uint32_t i = 0; i < n_cleaned; ++i) {
                     add_instruction(POP);
+                }
 
-                uint32_t placeholder_false_index;
+                uint32_t placeholder_false;
                 if (ast->right->right) {
                     add_instruction(JMP);
-                    placeholder_false_index = *n_bytes;
-                    (*n_bytes) += sizeof(placeholder_false_index);
+                    placeholder_false = create_placeholder();
                 }
 
                 // fill placeholder
-                memcpy(&bytes[placeholder_true_index], n_bytes, sizeof(*n_bytes));
+                patch_placeholder(placeholder_true);
 
                 // false
                 CHECK(evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate \"false\" side in if statement");
 
                 if (ast->right->right) {
                     n_cleaned = pop_variables(ast->scope, e);
-                    for (uint32_t i = 0; i < n_cleaned; ++i)
+                    for (uint32_t i = 0; i < n_cleaned; ++i) {
                         add_instruction(POP);
-                    memcpy(&bytes[placeholder_false_index], n_bytes, sizeof(*n_bytes));
+                    }
+
+                    patch_placeholder(placeholder_false);
                 }
 
                 return 0;
@@ -268,22 +276,21 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate expression in while statement");
 
                 add_instruction(JMP_NOT);
-
-                uint32_t placeholder_false_index = *n_bytes;
-                (*n_bytes) += sizeof(placeholder_false_index);
+                uint32_t placeholder_false = create_placeholder();
 
                 // body
                 CHECK(evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate while statement body");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i)
+                for (uint32_t i = 0; i < n_cleaned; ++i) {
                     add_instruction(POP);
+                }
 
                 add_instruction(JMP);
                 add_number(start_index);
 
                 // fill placeholder
-                memcpy(&bytes[placeholder_false_index], n_bytes, sizeof(*n_bytes));
+                patch_placeholder(placeholder_false);
 
                 return 0;
             }
@@ -339,9 +346,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 }
 
                 add_instruction(JMP);
-
-                uint32_t placeholder_index = *n_bytes;
-                (*n_bytes) += sizeof(placeholder_index);
+                uint32_t placeholder = create_placeholder();
 
                 const char* fun_name = ast->token->value;
                 add_function(fun_name, n_parameters, *n_bytes, e);
@@ -351,13 +356,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 CHECK(evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e), "failed to evaluate function body");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i)
+                for (uint32_t i = 0; i < n_cleaned; ++i) {
                     add_instruction(POP);
+                }
 
                 // TODO: double ret in case of return
                 add_instruction(RET);
 
-                memcpy(&bytes[placeholder_index], n_bytes, sizeof(*n_bytes));
+                patch_placeholder(placeholder);
 
                 return 0;
             }
@@ -386,11 +392,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     CHECK(evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function: %s argument", function_name);
                 }
 
-                if (f->type == USER) {
-                    add_instruction(CALL);
-                } else {
-                    add_instruction(CALL_BUILTIN);
-                }
+                add_instruction(f->type == USER ? CALL : CALL_BUILTIN);
                 add_number(f->index);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
@@ -398,7 +400,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 }
 
                 add_instruction(DUP_ABS);
-                add_number(0);
+                add_number(RETURN_INDEX);
 
                 return 0;
             }
@@ -408,11 +410,12 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
 
                 add_instruction(CHANGE_ABS);
-                add_number(0);
+                add_number(RETURN_INDEX);
 
                 uint32_t n_cleaned = get_var_count(0, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i)
+                for (uint32_t i = 0; i < n_cleaned; ++i) {
                     add_instruction(POP);
+                }
 
                 add_instruction(RET);
 
@@ -443,10 +446,26 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
     vm->stack_size
 
 #define return_value \
-    vm->stack[0]
+    vm->stack[RETURN_INDEX]
 
 #define read_value(value_type) \
     (*((value_type*)(vm->bytes + program_counter + 1)))
+
+#define read_value_increment(value_type) \
+    (*((value_type*)(vm->bytes + program_counter + 1))); program_counter += sizeof(value_type)
+
+
+void push_number(struct vm* vm, int32_t number) {
+    vm->stack[stack_size++] = (struct object){.type = OBJ_NUMBER, .int_value = number};
+}
+
+void push_string(struct vm* vm, char* string) {
+    vm->stack[stack_size++] = (struct object){.type = OBJ_STRING, .str_value = string};
+}
+
+void push_bool(struct vm* vm, bool value) {
+    vm->stack[stack_size++] = (struct object){.type = OBJ_BOOL, .bool_value = value};
+}
 
 void push_constant(struct vm* vm, int32_t address) {
     int type = *((int32_t*)&vm->bytes[address]);
@@ -455,27 +474,15 @@ void push_constant(struct vm* vm, int32_t address) {
     void* value;
     if (type == OBJ_NUMBER) {
         int32_t number = *((int32_t*)&vm->bytes[address]);
-        value = (void*)(size_t)number;
-    } else if (type == OBJ_STRING) {
-        value = &vm->bytes[address];
-    } else {
+        push_number(vm, number);
         return;
     }
 
-
-    vm->stack[stack_size++] = (struct object){.type = type, .value = value};
-}
-
-void push_number(struct vm* vm, int32_t number) {
-    vm->stack[stack_size++] = (struct object){.type = OBJ_NUMBER, .value = (void*)((size_t)number)};
-}
-
-void push_string(struct vm* vm, char* string) {
-    vm->stack[stack_size++] = (struct object){.type = OBJ_STRING, .value = string};
-}
-
-void push_bool(struct vm* vm, bool value) {
-    vm->stack[stack_size++] = (struct object){.type = OBJ_NUMBER, .value = (void*)((size_t)value)};
+    if (type == OBJ_STRING) {
+        value = &vm->bytes[address];
+        push_string(vm, value);
+        return;
+    }
 }
 
 #define push(o) \
@@ -488,18 +495,18 @@ void push_bool(struct vm* vm, bool value) {
     (&vm->stack[stack_size - 1 - n])
 
 int32_t pop_number(struct vm* vm) {
-    struct object* obj = pop();
-    return (int32_t)(size_t)obj->value;
+    struct object* obj = (struct object*)pop();
+    return obj->int_value;
 }
 
 const char* pop_string(struct vm* vm) {
-    struct object* obj = pop();
-    return (const char*)obj->value;
+    struct object* obj = (struct object*)pop();
+    return obj->str_value;
 }
 
 bool pop_bool(struct vm* vm) {
-    struct object* obj = pop();
-    return (bool)(size_t)obj->value;
+    struct object* obj = (struct object*)pop();
+    return obj->bool_value;
 }
 
 typedef struct object (*builtin_fun)(struct vm* vm);
@@ -508,38 +515,40 @@ static struct object print_object(struct vm* vm) {
     struct object* o = peek(0);
 
     if (o->type == OBJ_NUMBER) {
-        int32_t number = (int32_t)(size_t)o->value;
-        printf("%d\n", number);
+        printf("%d\n", o->int_value);
     } else if (o->type == OBJ_STRING) {
-        const char* string = o->value;
-        printf("%s\n", string);
+        printf("%s\n", o->str_value);
     }
 
     return (struct object){};
 }
 
 static struct object input_number(struct vm* vm) {
-    struct object* o = peek(0);
-    const char* input_text = o->value;
+    struct object* o = (struct object*)peek(0);
 
+    const char* input_text = o->str_value;
     printf("%s", input_text);
+
     int32_t number;
     scanf("%d", &number);
+
     puts("");
 
-    return (struct object){.type = OBJ_NUMBER, .value = (void*)(size_t)number};
+    return (struct object){.type = OBJ_NUMBER, .int_value = number};
 };
 
 static struct object input_string(struct vm* vm) {
-    struct object* o = peek(0);
-    const char* input_text = o->value;
+    struct object* o = (struct object*)peek(0);
 
+    const char* input_text = o->str_value;
     printf("%s", input_text);
-    char* string = NULL;
+
+    char* string = malloc(200);
     scanf("%s", string);
+
     puts("");
 
-    return (struct object){.type = OBJ_STRING, .value = string};
+    return (struct object){.type = OBJ_STRING, .str_value = string};
 }
 
 static builtin_fun builtin_functions[] = {
@@ -547,6 +556,27 @@ static builtin_fun builtin_functions[] = {
     input_number,
     input_string
 };
+
+void add_strings(struct vm* vm, struct object* value1, struct object* value2) {
+    char* new_string = malloc(500);
+    uint32_t n_new_string = 0;
+
+    if (value1->type == OBJ_NUMBER) {
+        n_new_string += sprintf(new_string, "%d", value1->int_value);
+    } else {
+        strcpy(new_string, value1->str_value);
+        n_new_string += strlen(value1->str_value);
+    }
+
+    if (value2->type == OBJ_NUMBER) {
+        n_new_string += sprintf(new_string + n_new_string, "%d", value2->int_value);
+    } else {
+        strcpy(new_string + n_new_string, value2->str_value);
+        n_new_string += strlen(value2->str_value);
+    }
+
+    push_string(vm, new_string);
+}
 
 int execute(struct vm* vm) {
     // 0 - return value
@@ -560,8 +590,10 @@ int execute(struct vm* vm) {
     while (!vm->halt && program_counter < vm->n_bytes) {
         switch (vm->bytes[program_counter]) {
             case PUSH:
-                push_constant(vm, read_value(int32_t));
-                program_counter += sizeof(int32_t);
+                {
+                    int32_t constant = read_value_increment(int32_t);
+                    push_constant(vm, constant);
+                }
                 break;
 
             case POP:
@@ -574,31 +606,12 @@ int execute(struct vm* vm) {
                     struct object* value2 = pop();
 
                     if (value1->type == OBJ_STRING || value2->type == OBJ_STRING) {
-                        char* new_string = malloc(500);
-                        uint32_t n_new_string = 0;
-
-                        if (value1->type == OBJ_NUMBER) {
-                            int32_t number = (int32_t)(size_t)value1->value;
-                            n_new_string += sprintf(new_string, "%d", number);
-                        } else {
-                            strcpy(new_string, value1->value);
-                            n_new_string += strlen(value1->value);
-                        }
-
-                        if (value2->type == OBJ_NUMBER) {
-                            int32_t number = (int32_t)(size_t)value2->value;
-                            n_new_string += sprintf(new_string + n_new_string, "%d", number);
-                        } else {
-                            strcpy(new_string + n_new_string, value2->value);
-                            n_new_string += strlen(value2->value);
-                        }
-
-                        push_string(vm, new_string);
+                        add_strings(vm, value1, value2);
                         break;
                     }
 
-                    int32_t number1 = (int32_t)(size_t)value1->value;
-                    int32_t number2 = (int32_t)(size_t)value2->value;
+                    int32_t number1 = (int32_t)(size_t)value1->int_value;
+                    int32_t number2 = (int32_t)(size_t)value2->int_value;
 
                     push_number(vm, number1 + number2);
                 }
@@ -633,9 +646,10 @@ int execute(struct vm* vm) {
                     uint32_t exp = pop_bool(vm);
                     if (exp) {
                         push_bool(vm, false);
-                    } else {
-                        push_bool(vm, true);
+                        break;
                     }
+
+                    push_bool(vm, true);
                 }
                 break;
 
@@ -705,41 +719,35 @@ int execute(struct vm* vm) {
 
             case DUP:
                 {
-                    int32_t index = read_value(int32_t);
+                    int32_t index = read_value_increment(int32_t);
                     push(vm->stack[stack_base + index]);
-                    program_counter += sizeof(index);
                 }
                 break;
             case DUP_ABS:
                 {
-                    int32_t index = read_value(int32_t);
+                    int32_t index = read_value_increment(int32_t);
                     push(vm->stack[index]);
-                    program_counter += sizeof(index);
                 }
                 break;
             case CHANGE:
                 {
-                    int32_t index = read_value(int32_t);
+                    int32_t index = read_value_increment(int32_t);
                     vm->stack[stack_base + index] = *pop();
-                    program_counter += sizeof(index);
                 }
                 break;
             case CHANGE_ABS:
                 {
-                    int32_t index = read_value(int32_t);
+                    int32_t index = read_value_increment(int32_t);
                     vm->stack[index] = *pop();
-                    program_counter += sizeof(index);
                 }
                 break;
             case JMP_NOT:
                 {
-                    uint32_t condition = pop_number(vm);
-                    int32_t index = read_value(int32_t);
+                    int32_t index = read_value_increment(int32_t);
 
+                    uint32_t condition = pop_number(vm);
                     if (!condition) {
                         program_counter = start_address + index - 1;
-                    } else {
-                        program_counter += sizeof(index);
                     }
                 }
                 break;
@@ -756,9 +764,9 @@ int execute(struct vm* vm) {
                     uint32_t old_base = stack_base;
                     stack_base = stack_size;
 
-                    push_number(vm, program_counter + 1 + sizeof(int32_t));
+                    int32_t index = read_value_increment(int32_t);
+                    push_number(vm, program_counter + 1);
 
-                    int32_t index = read_value(int32_t);
                     program_counter = start_address + index - 1;
 
                     push_number(vm, old_base);
@@ -767,18 +775,14 @@ int execute(struct vm* vm) {
 
             case CALL_BUILTIN:
                 {
-                    int32_t index = read_value(int32_t);
-                    program_counter += sizeof(index);
-
-                    struct object return_object = builtin_functions[index](vm);
-                    return_value = return_object;
-
+                    int32_t index = read_value_increment(int32_t);
+                    return_value = builtin_functions[index](vm);
                 }
                 break;
             case RET:
                 {
                     stack_base = pop_number(vm);
-                    uint32_t index = pop_number(vm);
+                    int32_t index = pop_number(vm);
 
                     program_counter = index - 1;
                 }

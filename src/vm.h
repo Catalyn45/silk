@@ -61,7 +61,11 @@ enum object_type {
 
 struct object {
     int32_t type;
-    void* value;
+    union {
+        int32_t int_value;
+        const char* str_value;
+        bool bool_value;
+    };
 };
 
 struct evaluator {
@@ -89,6 +93,8 @@ struct binary_data {
 
 int initialize_evaluator(struct evaluator* e);
 int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
+
+#define RETURN_INDEX 0
 
 struct vm {
     uint32_t globals[2048];
