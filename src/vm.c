@@ -388,6 +388,11 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     argument = argument->right;
                 }
 
+                if (n_arguments != f->n_parameters) {
+                    ERROR("the function %s needs %d arguments, %d were given", f->name, f->n_parameters, n_arguments);
+                    return 1;
+                }
+
                 for (int32_t i = n_arguments - 1; i >= 0; --i) {
                     CHECK(evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function: %s argument", function_name);
                 }
@@ -436,38 +441,29 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
     return 0;
 }
 
-#define program_counter \
-    vm->program_counter
-
-#define stack_base \
-    vm->stack_base
-
-#define stack_size \
-    vm->stack_size
-
 #define return_value \
     vm->stack[RETURN_INDEX]
 
 #define read_value(value_type) \
-    (*((value_type*)(vm->bytes + program_counter + 1)))
+    (*((value_type*)(vm->bytes + vm->program_counter + 1)))
 
 #define read_value_increment(value_type) \
-    (*((value_type*)(vm->bytes + program_counter + 1))); program_counter += sizeof(value_type)
+    (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
 
 
-void push_number(struct vm* vm, int32_t number) {
-    vm->stack[stack_size++] = (struct object){.type = OBJ_NUMBER, .int_value = number};
+static void push_number(struct vm* vm, int32_t number) {
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_NUMBER, .int_value = number};
 }
 
-void push_string(struct vm* vm, char* string) {
-    vm->stack[stack_size++] = (struct object){.type = OBJ_STRING, .str_value = string};
+static void push_string(struct vm* vm, char* string) {
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_STRING, .str_value = string};
 }
 
-void push_bool(struct vm* vm, bool value) {
-    vm->stack[stack_size++] = (struct object){.type = OBJ_BOOL, .bool_value = value};
+static void push_bool(struct vm* vm, bool value) {
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_BOOL, .bool_value = value};
 }
 
-void push_constant(struct vm* vm, int32_t address) {
+static void push_constant(struct vm* vm, int32_t address) {
     int type = *((int32_t*)&vm->bytes[address]);
     address += sizeof(int32_t);
 
@@ -486,27 +482,63 @@ void push_constant(struct vm* vm, int32_t address) {
 }
 
 #define push(o) \
-    vm->stack[stack_size++] = o
+    vm->stack[vm->stack_size++] = o
 
 #define pop() \
-    (&vm->stack[--stack_size])
+    (&vm->stack[--vm->stack_size])
 
 #define peek(n) \
-    (&vm->stack[stack_size - 1 - n])
+    (&vm->stack[vm->stack_size - 1 - n])
 
-int32_t pop_number(struct vm* vm) {
-    struct object* obj = (struct object*)pop();
+static int32_t pop_number(struct vm* vm) {
+    struct object* obj = pop();
     return obj->int_value;
 }
 
-const char* pop_string(struct vm* vm) {
-    struct object* obj = (struct object*)pop();
+static int pop_number_check(struct vm* vm, int32_t* out_number) {
+    struct object* obj = pop();
+    if (obj->type != OBJ_NUMBER) {
+        ERROR("number required, got %d", obj->type);
+        return 1;
+    }
+
+    *out_number = obj->int_value;
+    return 0;
+}
+
+/*
+// unused for the moment
+static const char* pop_string(struct vm* vm) {
+    struct object* obj = pop();
     return obj->str_value;
 }
 
+static int pop_string_check(struct vm* vm, const char** out_string) {
+    struct object* obj = pop();
+    if (obj->type != OBJ_STRING) {
+        ERROR("string required, got %d", obj->type);
+        return 1;
+    }
+
+    *out_string = obj->str_value;
+    return 0;
+}
+*/
+
 bool pop_bool(struct vm* vm) {
-    struct object* obj = (struct object*)pop();
+    struct object* obj = pop();
     return obj->bool_value;
+}
+
+bool pop_bool_check(struct vm* vm, bool* out_bool) {
+    struct object* obj = pop();
+    if (obj->type != OBJ_BOOL) {
+        ERROR("bool required, got %d", obj->type);
+        return 1;
+    }
+
+    *out_bool = obj->bool_value;
+    return 0;
 }
 
 typedef struct object (*builtin_fun)(struct vm* vm);
@@ -557,38 +589,43 @@ static builtin_fun builtin_functions[] = {
     input_string
 };
 
-void add_strings(struct vm* vm, struct object* value1, struct object* value2) {
+static int add_strings(struct vm* vm, struct object* value1, struct object* value2) {
     char* new_string = malloc(500);
     uint32_t n_new_string = 0;
 
     if (value1->type == OBJ_NUMBER) {
         n_new_string += sprintf(new_string, "%d", value1->int_value);
-    } else {
+    } else if (value1->type == OBJ_STRING) {
         strcpy(new_string, value1->str_value);
         n_new_string += strlen(value1->str_value);
+    } else {
+        return 1;
     }
 
     if (value2->type == OBJ_NUMBER) {
         n_new_string += sprintf(new_string + n_new_string, "%d", value2->int_value);
-    } else {
+    } else if (value2->type == OBJ_STRING) {
         strcpy(new_string + n_new_string, value2->str_value);
         n_new_string += strlen(value2->str_value);
+    } else {
+        return 1;
     }
 
     push_string(vm, new_string);
+    return 0;
 }
 
 int execute(struct vm* vm) {
     // 0 - return value
 
-    stack_size = 1;
-    stack_base = 1;
+    vm->stack_size = 1;
+    vm->stack_base = 1;
 
     int32_t start_address = *(int32_t*)vm->bytes;
-    program_counter = start_address;
+    vm->program_counter = start_address;
 
-    while (!vm->halt && program_counter < vm->n_bytes) {
-        switch (vm->bytes[program_counter]) {
+    while (!vm->halt && vm->program_counter < vm->n_bytes) {
+        switch (vm->bytes[vm->program_counter]) {
             case PUSH:
                 {
                     int32_t constant = read_value_increment(int32_t);
@@ -597,7 +634,7 @@ int execute(struct vm* vm) {
                 break;
 
             case POP:
-                --stack_size;
+                --vm->stack_size;
                 break;
 
             case ADD:
@@ -606,46 +643,100 @@ int execute(struct vm* vm) {
                     struct object* value2 = pop();
 
                     if (value1->type == OBJ_STRING || value2->type == OBJ_STRING) {
-                        add_strings(vm, value1, value2);
+                        CHECK(add_strings(vm, value1, value2), "failed to add objects");
                         break;
                     }
 
-                    int32_t number1 = (int32_t)(size_t)value1->int_value;
-                    int32_t number2 = (int32_t)(size_t)value2->int_value;
+                    if (value1->type == OBJ_NUMBER && value2->type == OBJ_NUMBER) {
+                        int32_t number1 = value1->int_value;
+                        int32_t number2 = value2->int_value;
 
-                    push_number(vm, number1 + number2);
+                        push_number(vm, number1 + number2);
+                        break;
+                    }
+
+                    ERROR("add operation for object types: %d and %d not defined", value1->type, value2->type);
+                    return 1;
+
                 }
                 break;
 
             case MIN:
                 {
-                    uint32_t number1 = pop_number(vm);
-                    uint32_t number2 = pop_number(vm);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for minus operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for minus operation is not a number");
+
                     push_number(vm, number1 - number2);
                 }
                 break;
 
             case MUL:
                 {
-                    uint32_t number1 = pop_number(vm);
-                    uint32_t number2 = pop_number(vm);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for multiply operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for multiply operation is not a number");
+
                     push_number(vm, number1 * number2);
                 }
                 break;
 
             case DIV:
                 {
-                    uint32_t number1 = pop_number(vm);
-                    uint32_t number2 = pop_number(vm);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for division operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for division operation is not a number");
+
                     push_number(vm, number1 / number2);
                 }
                 break;
 
             case NOT:
                 {
-                    uint32_t exp = pop_bool(vm);
-                    if (exp) {
-                        push_bool(vm, false);
+                    bool exp;
+                    CHECK(pop_bool_check(vm, &exp), "operand for not operation is not bool");
+
+                    push_bool(vm, !exp);
+                }
+                break;
+
+            case DEQ:
+                {
+                    struct object* exp1 = pop();
+                    struct object* exp2 = pop();
+
+                    if (exp1->type == OBJ_NUMBER && exp2->type == OBJ_NUMBER) {
+                        push_bool(vm, exp1->int_value == exp2->int_value);
+                        break;
+                    }
+
+                    if (exp1->type == OBJ_BOOL && exp2->type == OBJ_BOOL) {
+                        push_bool(vm, exp1->bool_value == exp2->bool_value);
+                        break;
+                    }
+
+                    push_bool(vm, false);
+                }
+                break;
+
+            case NEQ:
+                {
+                    struct object* exp1 = pop();
+                    struct object* exp2 = pop();
+
+                    if (exp1->type == OBJ_NUMBER && exp2->type == OBJ_NUMBER) {
+                        push_bool(vm, exp1->int_value != exp2->int_value);
+                        break;
+                    }
+
+                    if (exp1->type == OBJ_BOOL && exp2->type == OBJ_BOOL) {
+                        push_bool(vm, exp1->bool_value != exp2->bool_value);
                         break;
                     }
 
@@ -653,66 +744,74 @@ int execute(struct vm* vm) {
                 }
                 break;
 
-            case DEQ:
-                {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_bool(vm, exp1 == exp2);
-                }
-                break;
-
-            case NEQ:
-                {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_bool(vm, exp1 != exp2);
-                }
-                break;
-
             case GRE:
                 {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_bool(vm, exp1 > exp2);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for greater operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for greater operation is not a number");
+
+                    push_bool(vm, number1 > number2);
                 }
                 break;
 
             case GRQ:
                 {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_bool(vm, exp1 >= exp2);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for greater or equal operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for greater or equal operation is not a number");
+
+                    push_bool(vm, number1 >= number2);
                 }
                 break;
 
             case LES:
                 {
-                    uint32_t exp1 = pop_number(vm);
-                    uint32_t exp2 = pop_number(vm);
-                    push_bool(vm, exp1 < exp2);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for less operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for less operation is not a number");
+
+                    push_bool(vm, number1 < number2);
                 }
                 break;
 
             case LEQ:
                 {
-                    bool exp1 = pop_number(vm);
-                    bool exp2 = pop_number(vm);
-                    push_bool(vm, exp1 <= exp2);
+                    int32_t number1;
+                    CHECK(pop_number_check(vm, &number1), "operand 1 for less or equal operation is not a number");
+
+                    int32_t number2;
+                    CHECK(pop_number_check(vm, &number2), "operand 2 for less or equal operation is not a number");
+
+                    push_bool(vm, number1 <= number2);
                 }
                 break;
 
             case AND:
                 {
-                    bool exp1 = pop_bool(vm);
-                    bool exp2 = pop_bool(vm);
+                    bool exp1;
+                    CHECK(pop_bool_check(vm, &exp1), "operand 1 for and operation is not a number");
+
+                    bool exp2;
+                    CHECK(pop_bool_check(vm, &exp2), "operand 2 for and operation is not a number");
+
                     push_bool(vm, exp1 && exp2);
                 }
                 break;
 
             case OR:
                 {
-                    bool exp1 = pop_bool(vm);
-                    bool exp2 = pop_bool(vm);
+                    bool exp1;
+                    CHECK(pop_bool_check(vm, &exp1), "operand 1 for or operation is not a number");
+
+                    bool exp2;
+                    CHECK(pop_bool_check(vm, &exp2), "operand 2 for or operation is not a number");
+
                     push_bool(vm, exp1 || exp2);
                 }
                 break;
@@ -720,7 +819,7 @@ int execute(struct vm* vm) {
             case DUP:
                 {
                     int32_t index = read_value_increment(int32_t);
-                    push(vm->stack[stack_base + index]);
+                    push(vm->stack[vm->stack_base + index]);
                 }
                 break;
             case DUP_ABS:
@@ -732,7 +831,7 @@ int execute(struct vm* vm) {
             case CHANGE:
                 {
                     int32_t index = read_value_increment(int32_t);
-                    vm->stack[stack_base + index] = *pop();
+                    vm->stack[vm->stack_base + index] = *pop();
                 }
                 break;
             case CHANGE_ABS:
@@ -745,9 +844,11 @@ int execute(struct vm* vm) {
                 {
                     int32_t index = read_value_increment(int32_t);
 
-                    uint32_t condition = pop_number(vm);
+                    bool condition;
+                    CHECK(pop_bool_check(vm, &condition), "operand for jump operation is not bool");
+
                     if (!condition) {
-                        program_counter = start_address + index - 1;
+                        vm->program_counter = start_address + index - 1;
                     }
                 }
                 break;
@@ -755,19 +856,19 @@ int execute(struct vm* vm) {
             case JMP:
                 {
                     int32_t index = read_value(int32_t);
-                    program_counter = start_address + index - 1;
+                    vm->program_counter = start_address + index - 1;
                 }
                 break;
 
             case CALL:
                 {
-                    uint32_t old_base = stack_base;
-                    stack_base = stack_size;
+                    uint32_t old_base = vm->stack_base;
+                    vm->stack_base = vm->stack_size;
 
                     int32_t index = read_value_increment(int32_t);
-                    push_number(vm, program_counter + 1);
+                    push_number(vm, vm->program_counter + 1);
 
-                    program_counter = start_address + index - 1;
+                    vm->program_counter = start_address + index - 1;
 
                     push_number(vm, old_base);
                 }
@@ -781,15 +882,15 @@ int execute(struct vm* vm) {
                 break;
             case RET:
                 {
-                    stack_base = pop_number(vm);
+                    vm->stack_base = pop_number(vm);
                     int32_t index = pop_number(vm);
 
-                    program_counter = index - 1;
+                    vm->program_counter = index - 1;
                 }
                 break;
         }
 
-        ++program_counter;
+        ++vm->program_counter;
     }
 
     return 0;
