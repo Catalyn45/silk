@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-enum token {
+enum token_codes {
     TOK_INT = 0, // integer (20)
     TOK_STR = 1, // string ("example")
     TOK_ADD = 2, // add operator (+)
@@ -41,13 +41,13 @@ enum token {
     TOK_CLS = 34
 };
 
-struct token_entry {
+struct token {
     int code;     // token enum
     void* value;  // associated value ( for integer and string ) otherwise NULL
     int line;     // line from text
     int index;    // index from text
 };
 
-int tokenize(const char* text, uint32_t text_size, struct token_entry** out_tokens, uint32_t* out_n_tokens);
+int tokenize(const char* text, uint32_t text_size, struct token** out_tokens, uint32_t* out_n_tokens);
 
 #endif

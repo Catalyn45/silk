@@ -23,7 +23,10 @@ enum node_type {
     NODE_EXP_STATEMENT = 15,
     NODE_BOOL = 16,
     NODE_MEMBER = 17,
-    NODE_INDEX = 18
+    NODE_INDEX = 18,
+    NODE_DECLARATION = 19,
+    NODE_METHOD = 20,
+    NODE_CLASS = 21
 };
 
 enum NODE_FLAGS {
@@ -35,7 +38,7 @@ struct parser {
     const char* text;
     uint32_t current_index;
 
-    const struct token_entry*  tokens;
+    const struct token*  tokens;
     uint32_t n_tokens;
 
     uint32_t current_scope;

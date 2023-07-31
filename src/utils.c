@@ -79,13 +79,13 @@ static const char* rev_instruction[] = {
     "AND",
     "OR",
     "DUP",
-    "DUP_ABS",
+    "DUP_REG",
     "CHANGE",
-    "CHANGE_ABS",
+    "CHANGE_REG",
     "JMP_NOT",
     "JMP",
     "CALL",
-    "CALL_BUILTIN",
+    "CALL_NATIV",
     "RET"
 };
 

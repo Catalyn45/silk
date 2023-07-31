@@ -10,7 +10,7 @@
 #define in_range(character, start, stop) \
     ((character) >= (start) && (character) <= (stop))
 
-static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
+static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text_size, struct token* out_token) {
     int final_number = 0;
     int8_t sign = 1;
 
@@ -41,7 +41,7 @@ static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text
 }
 
 // TODO: parse special characters like \n
-static int tokenize_string(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
+static int tokenize_string(uint32_t* current_index, const char* text, uint32_t text_size, struct token* out_token) {
     char start_quote = text[(*current_index)++];
 
     char* value = malloc(CHUNK_SIZE);
@@ -114,7 +114,7 @@ static bool check_keyword(const char* text, int* out_token_code) {
     return false;
 }
 
-static int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
+static int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text_size, struct token* out_token) {
     char* value = malloc(CHUNK_SIZE);
     if (value == NULL) {
         MEMORY_ERROR();
@@ -152,8 +152,8 @@ static int tokenize_identifier(uint32_t* current_index, const char* text, uint32
 #define is_end() \
     (current_index + 1 >= text_size)
 
-int tokenize(const char* text, uint32_t text_size, struct token_entry** out_tokens, uint32_t* out_n_tokens) {
-    struct token_entry* tokens = malloc(CHUNK_SIZE * sizeof(*tokens));
+int tokenize(const char* text, uint32_t text_size, struct token** out_tokens, uint32_t* out_n_tokens) {
+    struct token* tokens = malloc(CHUNK_SIZE * sizeof(*tokens));
     if (tokens == NULL) {
         MEMORY_ERROR();
         return 1;
@@ -177,8 +177,8 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
 
         uint32_t start_index = current_index;
 
-        struct token_entry* token = &tokens[n_tokens++];
-        *token = (struct token_entry) {0};
+        struct token* token = &tokens[n_tokens++];
+        *token = (struct token) {0};
 
         switch (current_character) {
             case '+':
@@ -292,7 +292,7 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
         token->index = start_index;
     }
 
-    tokens[n_tokens++] = (struct token_entry) {
+    tokens[n_tokens++] = (struct token) {
         .code = TOK_EOF
     };
 

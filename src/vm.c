@@ -337,8 +337,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
         case NODE_STATEMENT:
             {
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate current statement");
                 CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate next statement");
+                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate current statement");
 
                 return 0;
             }
@@ -358,16 +358,24 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
                 struct node* parameter = ast->left;
                 while (parameter) {
-                    add_variable(parameter->token->value, ast->scope + 1, -1 - n_parameters, e);
-                    parameter = parameter->left;
+                    parameter = parameter->right;
                     ++n_parameters;
+                }
+
+                uint32_t function_parameters = n_parameters;
+
+                parameter = ast->left;
+                while (parameter) {
+                    --n_parameters;
+                    add_variable(parameter->token->value, ast->scope + 1, -1 - n_parameters, e);
+                    parameter = parameter->right;
                 }
 
                 add_instruction(JMP);
                 uint32_t placeholder = create_placeholder();
 
                 const char* fun_name = ast->token->value;
-                add_function(fun_name, n_parameters, *n_bytes, e);
+                add_function(fun_name, function_parameters, *n_bytes, e);
 
                 // the first 2 are old base and return address
                 uint32_t new_stack_index = 2;
@@ -395,24 +403,18 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     return 1;
                 }
 
-                struct node* arguments = ast->right;
-                struct node* argument = arguments;
-
                 uint32_t n_arguments = 0;
-                struct node* arg_list[256];
+                struct node* argument = ast->right;
 
                 while (argument) {
-                    arg_list[n_arguments++] = argument->left;
+                    CHECK(evaluate(argument->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function's: %s argument", function_name);
                     argument = argument->right;
+                    ++n_arguments;
                 }
 
                 if (n_arguments != f->n_parameters) {
                     ERROR("the function %s needs %d arguments, %d were given", f->name, f->n_parameters, n_arguments);
                     return 1;
-                }
-
-                for (int32_t i = n_arguments - 1; i >= 0; --i) {
-                    CHECK(evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function: %s argument", function_name);
                 }
 
                 add_instruction(f->type == USER ? CALL : CALL_NATIV);

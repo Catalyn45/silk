@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
 
     text[size] = '\0';
 
-    struct token_entry* tokens = NULL;
+    struct token* tokens = NULL;
     uint32_t n_tokens;
     int res = tokenize(text, strlen(text), &tokens, &n_tokens);
     if (res != 0) {
