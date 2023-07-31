@@ -70,7 +70,7 @@ static struct function* get_function(const char* function_name, struct evaluator
     return NULL;
 }
 
-static int32_t add_constant(struct binary_data* data, const struct object* o) {
+static int32_t add_constant(struct binary_data* data, const struct object* o, int32_t* out_address) {
     uint32_t constant_address = data->n_constants_bytes;
 
     *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->type;
@@ -79,7 +79,9 @@ static int32_t add_constant(struct binary_data* data, const struct object* o) {
     if (o->type == OBJ_NUMBER) {
         *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->int_value;
         data->n_constants_bytes += sizeof(int32_t);
-        return constant_address;
+
+        *out_address = constant_address;
+        return 0;
     }
 
     if (o->type == OBJ_STRING) {
@@ -89,10 +91,11 @@ static int32_t add_constant(struct binary_data* data, const struct object* o) {
         data->constants_bytes[data->n_constants_bytes] = '\0';
         ++data->n_constants_bytes;
 
-        return constant_address;
+        *out_address = constant_address;
+        return 0;
     }
 
-    return -1;
+    return 1;
 }
 
 static void add_function(const char* function_name, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
@@ -146,8 +149,20 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_NUMBER, .int_value = *(int32_t*)ast->token->value});
+                int32_t constant_address;
+                CHECK(add_constant(data, &(struct object){.type = OBJ_NUMBER, .int_value = *(int32_t*)ast->token->value}, &constant_address), "failed to add constant");
+
                 add_number(constant_address);
+
+                return 0;
+            }
+        case NODE_BOOL:
+            {
+                if (ast->token->code == TOK_TRU) {
+                    add_instruction(PUSH_TRUE);
+                } else {
+                    add_instruction(PUSH_FALSE);
+                }
 
                 return 0;
             }
@@ -155,7 +170,9 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 add_instruction(PUSH);
 
-                int32_t constant_address = add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value});
+                int32_t constant_address;
+                CHECK(add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value}, &constant_address), "failed to add constant");
+
                 add_number(constant_address);
 
                 return 0;
@@ -630,6 +647,18 @@ int execute(struct vm* vm) {
                 {
                     int32_t constant = read_value_increment(int32_t);
                     push_constant(vm, constant);
+                }
+                break;
+
+            case PUSH_TRUE:
+                {
+                    push_bool(vm, true);
+                }
+                break;
+
+            case PUSH_FALSE:
+                {
+                    push_bool(vm, false);
                 }
                 break;
 

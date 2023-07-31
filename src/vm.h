@@ -7,6 +7,8 @@
 
 enum instructions {
     PUSH,
+    PUSH_TRUE,
+    PUSH_FALSE,
     POP,
     ADD,
     MIN,

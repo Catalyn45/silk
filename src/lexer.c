@@ -7,17 +7,28 @@
 
 #define CHUNK_SIZE 512
 
+#define in_range(character, start, stop) \
+    ((character) >= (start) && (character) <= (stop))
+
 static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
     int final_number = 0;
+    int8_t sign = 1;
 
-    while(*current_index < text_size && text[*current_index] >= '0' && text[*current_index] <= '9') {
+    if (text[*current_index] == '-') {
+        sign = -1;
+        ++(*current_index);
+    }
+
+    while(*current_index < text_size && in_range(text[*current_index], '0', '9')) {
         final_number = final_number * 10 + text[*current_index] - '0';
         ++(*current_index);
     }
 
+    final_number = sign * final_number;
+
     int* token_value = malloc(sizeof(*token_value));
     if (token_value == NULL) {
-        ERROR("memory allocation failed");
+        MEMORY_ERROR();
         return 1;
     }
 
@@ -29,12 +40,13 @@ static int tokenize_int(uint32_t* current_index, const char* text, uint32_t text
     return 0;
 }
 
+// TODO: parse special characters like \n
 static int tokenize_string(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
     char start_quote = text[(*current_index)++];
 
     char* value = malloc(CHUNK_SIZE);
     if (value == NULL) {
-        ERROR("memory allocation failed");
+        MEMORY_ERROR();
         return 1;
     }
 
@@ -61,8 +73,8 @@ static int tokenize_string(uint32_t* current_index, const char* text, uint32_t t
 
 static bool is_iden_first(char character) {
     if (
-        (character >= 'a' && character <= 'z') ||
-        (character >= 'A' && character <= 'Z') ||
+        (in_range(character, 'a', 'z')) ||
+        (in_range(character, 'A', 'Z')) ||
         character == '_'
     ) {
         return true;
@@ -72,13 +84,40 @@ static bool is_iden_first(char character) {
 }
 
 static bool is_iden(char character) {
-    return is_iden_first(character) || (character >= '0' && character <= '9');
+    return is_iden_first(character) || in_range(character, '0', '9');
 }
 
-int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
+
+static bool check_keyword(const char* text, int* out_token_code) {
+    struct {
+        const char* name;
+        int token;
+    } keywords[] = {
+        {.name = "if",     .token = TOK_IF},
+        {.name = "else",   .token = TOK_ELS},
+        {.name = "while",  .token = TOK_WHL},
+        {.name = "def",    .token = TOK_FUN},
+        {.name = "return", .token = TOK_RET},
+        {.name = "true",   .token = TOK_TRU},
+        {.name = "false",  .token = TOK_FAL},
+        {.name = "var",    .token = TOK_VAR},
+        {.name = "class",  .token = TOK_CLS}
+    };
+
+    for (unsigned int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); ++i) {
+        if (strcmp(text, keywords[i].name) == 0) {
+            *out_token_code = keywords[i].token;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text_size, struct token_entry* out_token) {
     char* value = malloc(CHUNK_SIZE);
     if (value == NULL) {
-        ERROR("memory allocation failed");
+        MEMORY_ERROR();
         return 1;
     }
 
@@ -90,60 +129,33 @@ int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text
 
     value[value_index++] = '\0';
 
-    if (strcmp(value, "var") == 0) {
-        out_token->code = TOK_VAR;
-        goto keyword;
-    }
-
-    if (strcmp(value, "class") == 0) {
-        out_token->code = TOK_CLS;
-        goto keyword;
-    }
-
-    if (strcmp(value, "if") == 0) {
-        out_token->code = TOK_IF;
-        goto keyword;
-    }
-
-    if (strcmp(value, "else") == 0) {
-        out_token->code = TOK_ELS;
-        goto keyword;
-    }
-
-    if (strcmp(value, "while") == 0) {
-        out_token->code = TOK_WHL;
-        goto keyword;
-    }
-
-    if (strcmp(value, "def") == 0) {
-        out_token->code = TOK_FUN;
-        goto keyword;
-    }
-
-    if (strcmp(value, "return") == 0) {
-        out_token->code = TOK_RET;
-        goto keyword;
+    int token_code;
+    if (check_keyword(value, &token_code)) {
+        free(value);
+        out_token->code = token_code;
+        return 0;
     }
 
     out_token->code = TOK_IDN;
     out_token->value = value;
 
     return 0;
-
-keyword:
-    free(value);
-
-    return 0;
 }
 
 #define SET_TOKEN(tok_code) \
     token->code = tok_code; \
-    ++current_index;
+    current_index++
+
+#define next_character() \
+    (text[current_index + 1])
+
+#define is_end() \
+    (current_index + 1 >= text_size)
 
 int tokenize(const char* text, uint32_t text_size, struct token_entry** out_tokens, uint32_t* out_n_tokens) {
     struct token_entry* tokens = malloc(CHUNK_SIZE * sizeof(*tokens));
     if (tokens == NULL) {
-        ERROR("memory allocation failed");
+        MEMORY_ERROR();
         return 1;
     }
 
@@ -173,7 +185,11 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 SET_TOKEN(TOK_ADD);
                 break;
             case '-':
-                SET_TOKEN(TOK_MIN);
+                if (!is_end() && in_range(next_character(), '0', '9')) {
+                    CHECK(tokenize_int(&current_index, text, text_size, token), "failed to tokenize int");
+                } else {
+                    SET_TOKEN(TOK_MIN);
+                }
                 break;
             case '/':
                 SET_TOKEN(TOK_DIV);
@@ -182,7 +198,7 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 SET_TOKEN(TOK_MUL);
                 break;
             case '=':
-                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                if (!is_end() && next_character() == '=') {
                     SET_TOKEN(TOK_DEQ);
                     ++current_index;
                 } else {
@@ -214,7 +230,7 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 SET_TOKEN(TOK_COM);
                 break;
             case '<':
-                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                if (!is_end() && next_character() == '=') {
                     SET_TOKEN(TOK_LEQ);
                     ++current_index;
                 } else {
@@ -222,7 +238,7 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 }
                 break;
             case '>':
-                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                if (!is_end() && next_character() == '=') {
                     SET_TOKEN(TOK_GRQ);
                     ++current_index;
                 } else {
@@ -230,7 +246,7 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 }
                 break;
             case '!':
-                if (current_index + 1 < text_size && text[current_index + 1] == '=') {
+                if (!is_end() && next_character() == '=') {
                     SET_TOKEN(TOK_NEQ);
                     ++current_index;
                 } else {
@@ -238,42 +254,33 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 }
                 break;
             case '&':
-                if (current_index + 1 < text_size && text[current_index + 1] == '&') {
+                if (!is_end() && next_character() == '&') {
                     SET_TOKEN(TOK_AND);
                     ++current_index;
                 } else {
-                    ERROR("invalid token: &%c", text[current_index + 1]);
+                    ERROR("invalid token: &%c", next_character());
                     return 1;
                 }
                 break;
             case '|':
-                if (current_index + 1 < text_size && text[current_index + 1] == '|') {
+                if (!is_end() && next_character() == '|') {
                     SET_TOKEN(TOK_OR);
                     ++current_index;
                 } else {
-                    ERROR("invalid token: |%c", text[current_index + 1]);
+                    ERROR("invalid token: |%c", next_character());
                     return 1;
                 }
                 break;
             default:
-                if (current_character >= '0' && current_character <= '9') {
-                    int res = tokenize_int(&current_index, text, text_size, token);
-                    if ( res != 0 ) {
-                        // TODO: error
-                        return 1;
-                    }
+                if (in_range(current_character, '0', '9')) {
+                    CHECK(tokenize_int(&current_index, text, text_size, token), "failed to tokenize int");
+
                 } else if (current_character == '\"' || current_character == '\'') {
-                    int res = tokenize_string(&current_index, text, text_size, token);
-                    if ( res != 0) {
-                        // TODO: error
-                        return 1;
-                    }
+                    CHECK(tokenize_string(&current_index, text, text_size, token), "failed to tokenize string");
+
                 } else if (is_iden_first(current_character)) {
-                    int res = tokenize_identifier(&current_index, text, text_size, token);
-                    if ( res != 0 ) {
-                        // TODO: error
-                        return 1;
-                    }
+                    CHECK(tokenize_identifier(&current_index, text, text_size, token), "failed to tokenize identifier");
+
                 } else {
                     ERROR("invalid character: %c\n", current_character);
                     goto free_tokens;

@@ -33,7 +33,9 @@ const char* rev_tokens[] = {
     "or",
     ",",
     "def",
-    "return"
+    "return",
+    "true",
+    "false"
 };
 
 static const char* rev_node[] = {
@@ -53,12 +55,15 @@ static const char* rev_node[] = {
     "ARGUMENT",
     "RETURN",
     "EXPRESSION_STMT",
+    "BOOL",
     "MEMBER",
     "INDEX"
 };
 
 static const char* rev_instruction[] = {
     "PUSH",
+    "PUSH_TRUE",
+    "PUSH_FALSE",
     "POP",
     "ADD",
     "MIN",

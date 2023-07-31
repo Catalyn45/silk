@@ -18,7 +18,7 @@ enum token {
     TOK_LBR = 11, // left bracket ({)
     TOK_RBR = 12, // right bracket (})
     TOK_EOF = 13, // end of file
-    TOK_IF =  14,  // if
+    TOK_IF  = 14,  // if
     TOK_ELS = 15, // else
     TOK_WHL = 16, // while
     TOK_IDN = 17, // identifier
@@ -30,20 +30,22 @@ enum token {
     TOK_NEQ = 23,
     TOK_NOT = 24,
     TOK_AND = 25,
-    TOK_OR =  26,
+    TOK_OR  = 26,
     TOK_COM = 27,
     TOK_FUN = 28,
     TOK_RET = 29,
-    TOK_DOT = 30,
-    TOK_VAR = 31,
-    TOK_CLS = 32
+    TOK_TRU = 30,
+    TOK_FAL = 31,
+    TOK_DOT = 32,
+    TOK_VAR = 33,
+    TOK_CLS = 34
 };
 
 struct token_entry {
     int code;     // token enum
     void* value;  // associated value ( for integer and string ) otherwise NULL
-    int line;           // line from text
-    int index;          // index from text
+    int line;     // line from text
+    int index;    // index from text
 };
 
 int tokenize(const char* text, uint32_t text_size, struct token_entry** out_tokens, uint32_t* out_n_tokens);

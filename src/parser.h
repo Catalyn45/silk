@@ -21,8 +21,9 @@ enum node_type {
     NODE_ARGUMENT = 13,
     NODE_RETURN = 14,
     NODE_EXP_STATEMENT = 15,
-    NODE_MEMBER = 16,
-    NODE_INDEX = 17
+    NODE_BOOL = 16,
+    NODE_MEMBER = 17,
+    NODE_INDEX = 18
 };
 
 enum NODE_FLAGS {

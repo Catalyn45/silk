@@ -53,6 +53,17 @@ static int parse_primary(struct parser* parser, struct node** root) {
         return 0;
     }
 
+
+    if (current_token->code == TOK_TRU || current_token->code == TOK_FAL) {
+        advance();
+
+        struct node* node_bool = node_new(NODE_BOOL, current_token, NULL, NULL, parser->current_scope);
+        CHECK_NODE(node_bool);
+
+        *root = node_bool;
+        return 0;
+    }
+
     if (current_token->code == TOK_STR) {
         advance();
 
@@ -233,9 +244,7 @@ static int parse_additive(struct parser* parser, struct node** root) {
     const struct token_entry* current_token = get_token();
     while (
         current_token->code == TOK_ADD  ||
-        current_token->code == TOK_MIN  ||
-        current_token->code == TOK_AND  ||
-        current_token->code == TOK_OR
+        current_token->code == TOK_MIN
     ) {
         // eat current token
         advance();
