@@ -33,7 +33,10 @@ enum token {
     TOK_OR =  26,
     TOK_COM = 27,
     TOK_FUN = 28,
-    TOK_RET = 29
+    TOK_RET = 29,
+    TOK_DOT = 30,
+    TOK_VAR = 31,
+    TOK_CLS = 32
 };
 
 struct token_entry {

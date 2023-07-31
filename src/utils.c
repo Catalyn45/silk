@@ -52,7 +52,9 @@ static const char* rev_node[] = {
     "PARAMETER",
     "ARGUMENT",
     "RETURN",
-    "EXPRESSION_STMT"
+    "EXPRESSION_STMT",
+    "MEMBER",
+    "INDEX"
 };
 
 static const char* rev_instruction[] = {

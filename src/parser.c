@@ -123,16 +123,56 @@ static int parse_postfix(struct parser* parser, struct node** root) {
     CHECK(parse_primary(parser, &left), "failed to parse primary");
 
     const struct token_entry* current_token = get_token();
-    while (current_token->code == TOK_LPR && (left->flags & CALLABLE)) {
-        struct node* function_parameters = NULL;
-        CHECK(parse_argument_list(parser, &function_parameters), "failed to parse argument list");
-        struct node* function_node = node_new(NODE_FUNCTION_CALL, NULL, left, function_parameters, parser->current_scope);
-        function_node->flags |= CALLABLE;
 
-        left = function_node;
+    while (true) {
+        if (current_token->code == TOK_LPR && (left->flags & CALLABLE)) {
+            struct node* function_parameters = NULL;
+            CHECK(parse_argument_list(parser, &function_parameters), "failed to parse argument list");
+            struct node* function_node = node_new(NODE_FUNCTION_CALL, NULL, left, function_parameters, parser->current_scope);
+            function_node->flags |= CALLABLE;
+
+            left = function_node;
+        } else if (current_token->code == TOK_DOT) {
+            // eat dot
+            advance();
+
+            current_token = get_token();
+
+            EXPECT_TOKEN(current_token->code, TOK_IDN);
+
+            struct node* identifier = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
+            CHECK_NODE(identifier);
+
+            struct node* member_access = node_new(NODE_MEMBER, NULL, left, identifier, parser->current_scope);
+            CHECK_NODE(member_access);
+
+            member_access->flags |= (LVALUE | CALLABLE);
+
+            left = member_access;
+        } else if (current_token->code == TOK_LSQ) {
+            // eat [
+            advance();
+
+            struct node* expression;
+            CHECK(parse_expression(parser, &expression), "failed to parse expression");
+
+            current_token = get_token();
+
+            EXPECT_TOKEN(current_token->code, TOK_RSQ);
+            advance();
+
+            struct node* index_access = node_new(NODE_INDEX, NULL, left, expression, parser->current_scope);
+            CHECK_NODE(index_access);
+
+            index_access->flags |= (LVALUE | CALLABLE);
+
+            left = index_access;
+        } else {
+            break;
+        }
+
         current_token = get_token();
     }
-
     *root = left;
     return 0;
 }

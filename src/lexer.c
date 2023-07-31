@@ -90,6 +90,16 @@ int tokenize_identifier(uint32_t* current_index, const char* text, uint32_t text
 
     value[value_index++] = '\0';
 
+    if (strcmp(value, "var") == 0) {
+        out_token->code = TOK_VAR;
+        goto keyword;
+    }
+
+    if (strcmp(value, "class") == 0) {
+        out_token->code = TOK_CLS;
+        goto keyword;
+    }
+
     if (strcmp(value, "if") == 0) {
         out_token->code = TOK_IF;
         goto keyword;
@@ -190,6 +200,15 @@ int tokenize(const char* text, uint32_t text_size, struct token_entry** out_toke
                 break;
             case '}':
                 SET_TOKEN(TOK_RBR);
+                break;
+            case '[':
+                SET_TOKEN(TOK_LSQ);
+                break;
+            case ']':
+                SET_TOKEN(TOK_RSQ);
+                break;
+            case '.':
+                SET_TOKEN(TOK_DOT);
                 break;
             case ',':
                 SET_TOKEN(TOK_COM);
