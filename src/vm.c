@@ -370,14 +370,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_FUNCTION_CALL:
             {
-                const char* function_name = ast->token->value;
+                const char* function_name = ast->left->token->value;
                 struct function* f = get_function(function_name, e);
                 if (!f) {
                     ERROR("function not definited: %s", function_name);
                     return 1;
                 }
 
-                struct node* arguments = ast->left;
+                struct node* arguments = ast->right;
                 struct node* argument = arguments;
 
                 uint32_t n_arguments = 0;
@@ -435,7 +435,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
 
         default:
-            return 0;
+            return 1;
     }
 
     return 0;

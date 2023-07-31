@@ -23,6 +23,11 @@ enum node_type {
     NODE_EXP_STATEMENT = 15
 };
 
+enum NODE_FLAGS {
+    LVALUE   = (0x1 << 0),
+    CALLABLE = (0x1 << 1)
+};
+
 struct parser {
     const char* text;
     uint32_t current_index;

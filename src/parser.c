@@ -25,7 +25,6 @@
 }
 
 static int parse_expression(struct parser* parser, struct node** root);
-static int parse_function_call(struct parser* parser, struct node** root);
 
 static int parse_primary(struct parser* parser, struct node** root) {
     const struct token_entry* current_token = get_token();
@@ -65,14 +64,10 @@ static int parse_primary(struct parser* parser, struct node** root) {
     }
 
     if (current_token->code == TOK_IDN) {
-        if (next_token()->code == TOK_LPR) {
-            CHECK(parse_function_call(parser, root), "failed to parse function call");
-            return 0;
-        }
-
         advance();
         struct node* node_var = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
         CHECK_NODE(node_var);
+        node_var->flags |= (LVALUE | CALLABLE);
 
         *root = node_var;
         return 0;
@@ -80,6 +75,66 @@ static int parse_primary(struct parser* parser, struct node** root) {
 
     ERROR("unexpected token %s", rev_tokens[current_token->code]);
     return 1;
+}
+
+static int parse_argument_list(struct parser* parser, struct node** root ) {
+    const struct token_entry* current_token = get_token();
+    EXPECT_TOKEN(current_token->code, TOK_LPR);
+
+    struct node* argument_list = NULL;
+
+    struct node first_arg = {0};
+    struct node* argument = &first_arg;
+
+    do {
+
+        // eat left par or comma
+        advance();
+
+        current_token = get_token();
+        if (current_token->code != TOK_COM && current_token->code != TOK_RPR) {
+            argument->right = node_new(NODE_ARGUMENT, NULL, NULL, NULL, parser->current_scope);
+            CHECK_NODE(argument->right);
+
+            CHECK(parse_expression(parser, &argument->right->left), "false to parse expression");
+
+            if (!argument_list) {
+                argument_list = argument;
+            }
+
+            argument = argument->right;
+            current_token = get_token();
+        }
+
+    } while (current_token->code == TOK_COM );
+
+    current_token = get_token();
+    EXPECT_TOKEN(current_token->code, TOK_RPR);
+
+    // eat right par
+    advance();
+
+    *root = argument_list ? argument_list->right : NULL;
+    return 0;
+}
+
+static int parse_postfix(struct parser* parser, struct node** root) {
+    struct node* left = NULL;
+    CHECK(parse_primary(parser, &left), "failed to parse primary");
+
+    const struct token_entry* current_token = get_token();
+    while (current_token->code == TOK_LPR && (left->flags & CALLABLE)) {
+        struct node* function_parameters = NULL;
+        CHECK(parse_argument_list(parser, &function_parameters), "failed to parse argument list");
+        struct node* function_node = node_new(NODE_FUNCTION_CALL, NULL, left, function_parameters, parser->current_scope);
+        function_node->flags |= CALLABLE;
+
+        left = function_node;
+        current_token = get_token();
+    }
+
+    *root = left;
+    return 0;
 }
 
 static int parse_unary(struct parser* parser, struct node** root) {
@@ -100,7 +155,7 @@ static int parse_unary(struct parser* parser, struct node** root) {
         return 0;
     }
 
-    CHECK(parse_primary(parser, root), "failed to parse primary");
+    CHECK(parse_postfix(parser, root), "failed to parse postfix");
     return 0;
 }
 
@@ -270,6 +325,21 @@ static int parse_expression_statement(struct parser* parser, struct node** root)
     struct node* expression;
     CHECK(parse_expression(parser, &expression), "Failed to pare expression");
 
+    const struct token_entry* current_token = get_token();
+    if (current_token->code == TOK_EQL &&  (expression->flags & LVALUE)) {
+        // eat equals
+        advance();
+
+        struct node* assignment_value;
+        CHECK(parse_expression(parser, &assignment_value), "failed to parse expression");
+
+        struct node* assignment_node = node_new(NODE_ASSIGN, NULL, expression, assignment_value, parser->current_scope);
+        CHECK_NODE(assignment_node);
+
+        *root = assignment_node;
+        return 0;
+    }
+
     struct node* expression_statement_node = node_new(NODE_EXP_STATEMENT, NULL, expression, NULL, parser->current_scope);
     CHECK_NODE(expression_statement_node);
 
@@ -328,87 +398,6 @@ static int parse_while(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_assignment(struct parser* parser, struct node** root ) {
-    const struct token_entry* variable_token = get_token();
-
-    // eat variable name
-    advance();
-
-    const struct token_entry* current_token = get_token();
-    EXPECT_TOKEN(current_token->code, TOK_EQL);
-
-    // eat equals
-    advance();
-
-    struct node* var_node = node_new(NODE_VAR, variable_token, NULL, NULL, parser->current_scope);
-    CHECK_NODE(var_node);
-
-    struct node* assignment_value;
-    CHECK(parse_expression(parser, &assignment_value), "failed to parse expression");
-
-    struct node* assignment_node = node_new(NODE_ASSIGN, NULL, var_node, assignment_value, parser->current_scope);
-    CHECK_NODE(assignment_node);
-
-    *root = assignment_node;
-    return 0;
-}
-
-static int parse_argument_list(struct parser* parser, struct node** root ) {
-    const struct token_entry* current_token = get_token();
-    EXPECT_TOKEN(current_token->code, TOK_LPR);
-
-    struct node* argument_list = NULL;
-
-    struct node first_arg = {0};
-    struct node* argument = &first_arg;
-
-    do {
-
-        // eat left par or comma
-        advance();
-
-        current_token = get_token();
-        if (current_token->code != TOK_COM && current_token->code != TOK_RPR) {
-            argument->right = node_new(NODE_ARGUMENT, NULL, NULL, NULL, parser->current_scope);
-            CHECK_NODE(argument->right);
-
-            CHECK(parse_expression(parser, &argument->right->left), "false to parse expression");
-
-            if (!argument_list) {
-                argument_list = argument;
-            }
-
-            argument = argument->right;
-            current_token = get_token();
-        }
-
-    } while (current_token->code == TOK_COM );
-
-    current_token = get_token();
-    EXPECT_TOKEN(current_token->code, TOK_RPR);
-
-    // eat right par
-    advance();
-
-    *root = argument_list ? argument_list->right : NULL;
-    return 0;
-}
-
-static int parse_function_call(struct parser* parser, struct node** root ) {
-    const struct token_entry* function_name = get_token();
-
-    // eat function name
-    advance();
-
-    struct node* function_parameters = NULL;
-    CHECK(parse_argument_list(parser, &function_parameters), "failed to parse argument list");
-
-    struct node* function_node = node_new(NODE_FUNCTION_CALL, function_name, function_parameters, NULL, parser->current_scope);
-    CHECK_NODE(function_node);
-
-    *root = function_node;
-    return 0;
-}
 
 static int parse_parameter_list(struct parser* parser, struct node** root ) {
     const struct token_entry* current_token = get_token();
@@ -510,10 +499,10 @@ static int parse_statement(struct parser* parser, struct node** root ) {
         return 0;
     }
 
-    if (current_token_code == TOK_IDN && next_token()->code == TOK_EQL) {
-        CHECK(parse_assignment(parser, root), "failed to parse assignment");
-        return 0;
-    }
+    // if (current_token_code == TOK_IDN && next_token()->code == TOK_EQL) {
+    //     CHECK(parse_assignment(parser, root), "failed to parse assignment");
+    //     return 0;
+    // }
 
     CHECK(parse_expression_statement(parser, root), "failed to parse expression statement");
     return 0;

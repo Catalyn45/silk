@@ -9,6 +9,7 @@ struct node {
     const struct token_entry* token;
     struct node* left;
     struct node* right;
+    uint32_t flags;
 };
 
 struct node* node_new(int type, const struct token_entry* token, struct node* left, struct node* right, uint32_t scope);
