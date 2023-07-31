@@ -415,14 +415,14 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     CHECK(evaluate(arg_list[i], bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function: %s argument", function_name);
                 }
 
-                add_instruction(f->type == USER ? CALL : CALL_BUILTIN);
+                add_instruction(f->type == USER ? CALL : CALL_NATIV);
                 add_number(f->index);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
                     add_instruction(POP);
                 }
 
-                add_instruction(DUP_REGISTER);
+                add_instruction(DUP_REG);
                 add_number(RETURN_REGISTER);
 
                 return 0;
@@ -432,7 +432,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
 
-                add_instruction(CHANGE_REGISTER);
+                add_instruction(CHANGE_REG);
                 add_number(RETURN_REGISTER);
 
                 uint32_t n_cleaned = get_var_count(0, e);
@@ -844,7 +844,7 @@ int execute(struct vm* vm) {
                     push(vm->stack[vm->stack_base + index]);
                 }
                 break;
-            case DUP_REGISTER:
+            case DUP_REG:
                 {
                     int32_t index = read_value_increment(int32_t);
                     push(vm->registers[index]);
@@ -856,7 +856,7 @@ int execute(struct vm* vm) {
                     vm->stack[vm->stack_base + index] = *pop();
                 }
                 break;
-            case CHANGE_REGISTER:
+            case CHANGE_REG:
                 {
                     int32_t index = read_value_increment(int32_t);
                     vm->registers[index] = *pop();
@@ -896,7 +896,7 @@ int execute(struct vm* vm) {
                 }
                 break;
 
-            case CALL_BUILTIN:
+            case CALL_NATIV:
                 {
                     int32_t index = read_value_increment(int32_t);
                     vm->registers[RETURN_REGISTER] = builtin_functions[index](vm);

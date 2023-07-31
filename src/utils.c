@@ -97,9 +97,9 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
         switch (bytes[i]) {
             case PUSH:
             case DUP:
-            case DUP_REGISTER:
+            case DUP_REG:
             case CHANGE:
-            case CHANGE_REGISTER:
+            case CHANGE_REG:
                 printf(" %d", *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;
@@ -107,7 +107,7 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
             case JMP_NOT:
             case JMP:
             case CALL:
-            case CALL_BUILTIN:
+            case CALL_NATIV:
                 printf(" %d", start_address + *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;

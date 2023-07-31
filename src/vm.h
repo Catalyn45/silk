@@ -6,32 +6,32 @@
 #include <stddef.h>
 
 enum instructions {
-    PUSH,
-    PUSH_TRUE,
-    PUSH_FALSE,
-    POP,
-    ADD,
-    MIN,
-    MUL,
-    DIV,
-    NOT,
-    DEQ,
-    NEQ,
-    GRE,
-    GRQ,
-    LES,
-    LEQ,
-    AND,
-    OR,
-    DUP,
-    DUP_REGISTER,
-    CHANGE,
-    CHANGE_REGISTER,
-    JMP_NOT,
-    JMP,
-    CALL,
-    CALL_BUILTIN,
-    RET
+    PUSH       = 0,
+    PUSH_TRUE  = 1,
+    PUSH_FALSE = 2,
+    POP        = 3,
+    ADD        = 4,
+    MIN        = 5,
+    MUL        = 6,
+    DIV        = 7,
+    NOT        = 8,
+    DEQ        = 9,
+    NEQ        = 10,
+    GRE        = 11,
+    GRQ        = 12,
+    LES        = 13,
+    LEQ        = 14,
+    AND        = 15,
+    OR         = 16,
+    DUP        = 17,
+    DUP_REG    = 18,
+    CHANGE     = 19,
+    CHANGE_REG = 20,
+    JMP_NOT    = 21,
+    JMP        = 22,
+    CALL       = 23,
+    CALL_NATIV = 24,
+    RET        = 25
 };
 
 struct var {
@@ -58,8 +58,8 @@ struct function {
 enum object_type {
     OBJ_NUMBER = 0,
     OBJ_STRING = 1,
-    OBJ_BOOL = 2,
-    OBJ_CLASS = 3
+    OBJ_BOOL   = 2,
+    OBJ_CLASS  = 3
 };
 
 struct object {
