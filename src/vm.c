@@ -107,6 +107,7 @@ static void add_function(const char* function_name, uint32_t n_parameters, uint3
     };
 }
 
+#define RETURN_REGISTER 0
 
 #define add_instruction(code) \
 { \
@@ -421,8 +422,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     add_instruction(POP);
                 }
 
-                add_instruction(DUP_ABS);
-                add_number(RETURN_INDEX);
+                add_instruction(DUP_REGISTER);
+                add_number(RETURN_REGISTER);
 
                 return 0;
             }
@@ -431,8 +432,8 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             {
                 CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
 
-                add_instruction(CHANGE_ABS);
-                add_number(RETURN_INDEX);
+                add_instruction(CHANGE_REGISTER);
+                add_number(RETURN_REGISTER);
 
                 uint32_t n_cleaned = get_var_count(0, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i) {
@@ -457,9 +458,6 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
     return 0;
 }
-
-#define return_value \
-    vm->stack[RETURN_INDEX]
 
 #define read_value(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1)))
@@ -633,11 +631,6 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
 }
 
 int execute(struct vm* vm) {
-    // 0 - return value
-
-    vm->stack_size = 1;
-    vm->stack_base = 1;
-
     int32_t start_address = *(int32_t*)vm->bytes;
     vm->program_counter = start_address;
 
@@ -851,10 +844,10 @@ int execute(struct vm* vm) {
                     push(vm->stack[vm->stack_base + index]);
                 }
                 break;
-            case DUP_ABS:
+            case DUP_REGISTER:
                 {
                     int32_t index = read_value_increment(int32_t);
-                    push(vm->stack[index]);
+                    push(vm->registers[index]);
                 }
                 break;
             case CHANGE:
@@ -863,10 +856,10 @@ int execute(struct vm* vm) {
                     vm->stack[vm->stack_base + index] = *pop();
                 }
                 break;
-            case CHANGE_ABS:
+            case CHANGE_REGISTER:
                 {
                     int32_t index = read_value_increment(int32_t);
-                    vm->stack[index] = *pop();
+                    vm->registers[index] = *pop();
                 }
                 break;
             case JMP_NOT:
@@ -906,7 +899,7 @@ int execute(struct vm* vm) {
             case CALL_BUILTIN:
                 {
                     int32_t index = read_value_increment(int32_t);
-                    return_value = builtin_functions[index](vm);
+                    vm->registers[RETURN_REGISTER] = builtin_functions[index](vm);
                 }
                 break;
             case RET:

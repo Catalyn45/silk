@@ -97,9 +97,9 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
         switch (bytes[i]) {
             case PUSH:
             case DUP:
-            case DUP_ABS:
+            case DUP_REGISTER:
             case CHANGE:
-            case CHANGE_ABS:
+            case CHANGE_REGISTER:
                 printf(" %d", *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;

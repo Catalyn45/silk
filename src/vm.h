@@ -24,9 +24,9 @@ enum instructions {
     AND,
     OR,
     DUP,
-    DUP_ABS,
+    DUP_REGISTER,
     CHANGE,
-    CHANGE_ABS,
+    CHANGE_REGISTER,
     JMP_NOT,
     JMP,
     CALL,
@@ -58,7 +58,8 @@ struct function {
 enum object_type {
     OBJ_NUMBER = 0,
     OBJ_STRING = 1,
-    OBJ_BOOL = 2
+    OBJ_BOOL = 2,
+    OBJ_CLASS = 3
 };
 
 struct object {
@@ -67,27 +68,28 @@ struct object {
         int32_t int_value;
         const char* str_value;
         bool bool_value;
+        struct object_class* object_class_value;
     };
 };
 
-struct evaluator {
-    struct var constants[1024];
-    uint32_t n_constants;
+struct object_class {
+    int32_t class_index;
 
+    uint32_t n_members;
+    struct object members[256];
+};
+
+struct evaluator {
     struct function functions[1024];
     uint32_t n_functions;
 
     struct var locals[1024];
     uint32_t n_locals;
-
 };
 
 struct binary_data {
     uint8_t constants_bytes[2048];
     uint32_t n_constants_bytes;
-
-    uint8_t function_bytes[2048];
-    uint32_t n_function_bytes;
 
     uint8_t program_bytes[2048];
     uint32_t n_program_bytes;
@@ -95,8 +97,6 @@ struct binary_data {
 
 int initialize_evaluator(struct evaluator* e);
 int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
-
-#define RETURN_INDEX 0
 
 struct vm {
     uint32_t globals[2048];
@@ -108,7 +108,7 @@ struct vm {
     uint32_t stack_size;
     uint32_t stack_base;
     uint32_t program_counter;
-    uint32_t return_register;
+    struct object registers[10];
 
     bool halt;
 };
