@@ -10,14 +10,14 @@
 #include <strings.h>
 #include <sys/types.h>
 
-static int get_variable(const char* name, struct evaluator* e, int32_t* index) {
+static int get_variable(const char* name, struct evaluator* e, struct var** out_var) {
     uint32_t i = e->n_locals;
 
     while (i > 0) {
         --i;
 
         if (strcmp(name, e->locals[i].name) == 0) {
-            *index = e->locals[i].stack_index;
+            *out_var = &e->locals[i];
             return 0;
         }
     }
@@ -95,44 +95,43 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
         return 0;
     }
 
-    return 1;
-}
+    if (o->type == OBJ_FUNCTION) {
+        *(struct object_function*)(&data->constants_bytes[data->n_constants_bytes]) = *o->function_value;
+        data->n_constants_bytes += sizeof(struct object_function);
 
-static void add_function(const char* function_name, uint32_t n_parameters, uint32_t index, struct evaluator* e) {
-    e->functions[e->n_functions++] = (struct function) {
-        .type = USER,
-        .name = function_name,
-        .n_parameters = n_parameters,
-        .index = index
-    };
+        *out_address = constant_address;
+        return 0;
+    }
+
+    return 1;
 }
 
 #define RETURN_REGISTER 0
 
 #define add_instruction(code) \
 { \
-    bytes[(*n_bytes)++] = code; \
+    data->program_bytes[(data->n_program_bytes)++] = code; \
 }
 
 #define add_number(num) \
 { \
     int32_t int_value = (int32_t)(num); \
-    memcpy(&bytes[*n_bytes], &int_value, sizeof(int_value)); \
-    (*n_bytes) += sizeof(num); \
+    memcpy(&data->program_bytes[data->n_program_bytes], &int_value, sizeof(int_value)); \
+    data->n_program_bytes += sizeof(num); \
 }
 
 #define increment_index() \
     ++(*current_stack_index)
 
 #define create_placeholder() \
-    *n_bytes; (*n_bytes) += sizeof(uint32_t)
+    data->n_program_bytes; (data->n_program_bytes) += sizeof(uint32_t)
 
 #define patch_placeholder(placeholder) \
     { \
-        memcpy(&bytes[placeholder], n_bytes, sizeof(*n_bytes)); \
+        memcpy(&data->program_bytes[placeholder], &data->n_program_bytes, sizeof(data->n_program_bytes)); \
     } \
 
-int initialize_evaluator(struct evaluator* e) {
+int add_builtin_functions(struct evaluator* e) {
     e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "print",        .n_parameters = 1, .index = 0};
     e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_number", .n_parameters = 1, .index = 1};
     e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_string", .n_parameters = 1, .index = 2};
@@ -140,7 +139,27 @@ int initialize_evaluator(struct evaluator* e) {
     return 0;
 };
 
-int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e) {
+
+static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* out_scope) {
+    switch (ast->type) {
+        case NODE_VAR:
+            {
+                struct var* variable;
+                int res = get_variable(ast->token->value, e, &variable);
+                if (res == 0) {
+                    add_instruction(PUSH_NUM);
+                    add_number(variable->stack_index);
+                    *out_scope = variable->scope;
+
+                    return 0;
+                }
+            }
+    }
+
+    return 1;
+}
+
+int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope) {
     if (ast == NULL) {
         return 0;
     }
@@ -180,18 +199,48 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
         case NODE_VAR:
             {
-                int32_t position;
-                CHECK(get_variable(ast->token->value, e, &position), "failed to get variable");
+                struct var* variable;
+                int res = get_variable(ast->token->value, e, &variable);
+                if (res == 0) {
+                    // variable outside of function
+                    if (variable->scope < function_scope) {
+                        add_instruction(DUP);
+                    } else {
+                        add_instruction(DUP_LOC);
+                    }
 
-                add_instruction(DUP);
-                add_number(position);
+                    add_number(variable->stack_index);
+
+                    return 0;
+                }
+
+                const char* name = ast->token->value;
+                struct function* f = get_function(name, e);
+                if (f == NULL) {
+                    ERROR("identifier %s does not exist", name);
+                    return 1;
+                }
+
+                struct object o = {
+                    .type = OBJ_FUNCTION,
+                    .function_value = &(struct object_function) {
+                        .type = BUILT_IN,
+                        .n_parameters = f->n_parameters,
+                        .index = f->index
+                    }
+                };
+
+                int32_t out_address;
+                add_constant(data, &o, &out_address);
+
+                add_instruction(PUSH);
+                add_number(out_address);
 
                 return 0;
             }
-
         case NODE_BINARY_OP:
-            CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate binary operation");
-            CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e),  "failed to evaluate binary operation");
+            CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate binary operation");
+            CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope),  "failed to evaluate binary operation");
 
             switch (ast->token->code) {
                 case TOK_ADD:
@@ -250,13 +299,13 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_IF:
             {
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate expression in if statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate expression in if statement");
 
                 add_instruction(JMP_NOT);
                 uint32_t placeholder_true = create_placeholder();
 
                 // true
-                CHECK(evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate \"true\" side in if statement");
+                CHECK(evaluate(e, ast->right->left, data, current_stack_index, function_scope), "failed to evaluate \"true\" side in if statement");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i) {
@@ -273,7 +322,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 patch_placeholder(placeholder_true);
 
                 // false
-                CHECK(evaluate(ast->right->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate \"false\" side in if statement");
+                CHECK(evaluate(e, ast->right->right, data, current_stack_index, function_scope), "failed to evaluate \"false\" side in if statement");
 
                 if (ast->right->right) {
                     n_cleaned = pop_variables(ast->scope, e);
@@ -289,15 +338,15 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_WHILE:
             {
-                uint32_t start_index = *n_bytes;
+                uint32_t start_index = data->n_program_bytes;
 
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate expression in while statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate expression in while statement");
 
                 add_instruction(JMP_NOT);
                 uint32_t placeholder_false = create_placeholder();
 
                 // body
-                CHECK(evaluate(ast->right->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate while statement body");
+                CHECK(evaluate(e, ast->right->left, data, current_stack_index, function_scope), "failed to evaluate while statement body");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i) {
@@ -313,45 +362,99 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 return 0;
             }
 
-        case NODE_ASSIGN:
+        case NODE_DECLARATION:
             {
-                const char* var_name = ast->left->token->value;
+                const char* var_name = ast->token->value;
+                add_variable(var_name, ast->scope, *current_stack_index, e);
+                increment_index();
 
-                int32_t position;
-                int res = get_variable(var_name, e, &position);
-                if (res != 0) {
-                    add_variable(var_name, ast->scope, *current_stack_index, e);
-                    increment_index();
-
-                    CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate initialization value");
-
-                    return 0;
+                if (ast->left == NULL) {
+                    add_instruction(PUSH_FALSE);
+                } else {
+                    CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate initialization value");
                 }
 
-                CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate assignment value");
+                return 0;
+            }
+        case NODE_ASSIGN:
+            {
+                // first evaluate value to assign
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate assignment value");
 
-                add_instruction(CHANGE);
-                add_number(position);
+                // then evaluate the lvalue
+                uint32_t lvalue_scope;
+                CHECK(evaluate_lvalue(e, ast->left, data, &lvalue_scope), "failed to evaluate lvalue");
+
+                // variable outside of function
+                if (lvalue_scope < function_scope) {
+                    add_instruction(CHANGE);
+                } else {
+                    add_instruction(CHANGE_LOC);
+                }
 
                 return 0;
             }
         case NODE_STATEMENT:
             {
-                CHECK(evaluate(ast->right, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate next statement");
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate current statement");
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate next statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate current statement");
 
                 return 0;
             }
 
         case NODE_NOT:
             {
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate not statement");
-
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate not statement");
                 add_instruction(NOT);
 
                 return 0;
             }
 
+        case NODE_CLASS:
+            {
+                const char* class_name = ast->token->value;
+                e->classes[e->n_classes++] = (struct object_class) {
+                    .name = class_name
+                };
+
+                // evaluate members
+                evaluate(e, ast->left, data, current_stack_index, function_scope);
+
+                // evaluate methods
+                evaluate(e, ast->right, data, current_stack_index, function_scope);
+
+                return 0;
+            }
+
+        case NODE_MEMBER:
+            {
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate next member");
+
+                struct object_class* current_class = &e->classes[e->n_classes - 1];
+                current_class->members[current_class->n_members++] = (struct pair){
+                    ast->left->token->value,
+                    data->n_program_bytes
+                };
+
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate member");
+
+                return 0;
+            }
+
+        case NODE_METHOD:
+            {
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate next method");
+
+                struct object_class* current_class = &e->classes[e->n_classes - 1];
+                current_class->methods[current_class->n_methods++] = (struct pair){
+                    ast->left->token->value,
+                    data->n_program_bytes
+                };
+
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate method");
+
+                return 0;
+            }
         case NODE_FUNCTION:
             {
                 uint32_t n_parameters = 0;
@@ -362,7 +465,27 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     ++n_parameters;
                 }
 
-                uint32_t function_parameters = n_parameters;
+                const char* fun_name = ast->token->value;
+                struct object o = {
+                    .type = OBJ_FUNCTION,
+                    .function_value = &(struct object_function) {
+                        .type = USER,
+                        .n_parameters = n_parameters,
+                        .index = data->n_program_bytes + sizeof(int32_t) + sizeof(int32_t) + 2
+                   }
+                };
+
+                int32_t out_address;
+                add_constant(data, &o, &out_address);
+
+                add_instruction(PUSH);
+                add_number(out_address);
+
+                add_instruction(JMP);
+                uint32_t placeholder = create_placeholder();
+
+                add_variable(fun_name, ast->scope, *current_stack_index, e);
+                increment_index();
 
                 parameter = ast->left;
                 while (parameter) {
@@ -371,15 +494,9 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                     parameter = parameter->right;
                 }
 
-                add_instruction(JMP);
-                uint32_t placeholder = create_placeholder();
-
-                const char* fun_name = ast->token->value;
-                add_function(fun_name, function_parameters, *n_bytes, e);
-
                 // the first 2 are old base and return address
                 uint32_t new_stack_index = 2;
-                CHECK(evaluate(ast->right, bytes, n_bytes, data, &new_stack_index,  e), "failed to evaluate function body");
+                CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1), "failed to evaluate function body");
 
                 uint32_t n_cleaned = pop_variables(ast->scope, e);
                 for (uint32_t i = 0; i < n_cleaned; ++i) {
@@ -394,31 +511,19 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
                 return 0;
             }
 
-        case NODE_FUNCTION_CALL:
+        case NODE_CALL:
             {
-                const char* function_name = ast->left->token->value;
-                struct function* f = get_function(function_name, e);
-                if (!f) {
-                    ERROR("function not definited: %s", function_name);
-                    return 1;
-                }
-
                 uint32_t n_arguments = 0;
                 struct node* argument = ast->right;
 
                 while (argument) {
-                    CHECK(evaluate(argument->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate function's: %s argument", function_name);
+                    CHECK(evaluate(e, argument->left, data, current_stack_index, function_scope), "failed to evaluate function argument");
                     argument = argument->right;
                     ++n_arguments;
                 }
 
-                if (n_arguments != f->n_parameters) {
-                    ERROR("the function %s needs %d arguments, %d were given", f->name, f->n_parameters, n_arguments);
-                    return 1;
-                }
-
-                add_instruction(f->type == USER ? CALL : CALL_NATIV);
-                add_number(f->index);
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate lvalue to call");
+                add_instruction(CALL);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
                     add_instruction(POP);
@@ -432,7 +537,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
 
         case NODE_RETURN:
             {
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate return value");
 
                 add_instruction(CHANGE_REG);
                 add_number(RETURN_REGISTER);
@@ -448,7 +553,7 @@ int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_
             }
         case NODE_EXP_STATEMENT:
             {
-                CHECK(evaluate(ast->left, bytes, n_bytes, data, current_stack_index, e), "failed to evaluate return value");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate return value");
                 add_instruction(POP);
 
                 return 0;
@@ -480,6 +585,10 @@ static void push_bool(struct vm* vm, bool value) {
     vm->stack[vm->stack_size++] = (struct object){.type = OBJ_BOOL, .bool_value = value};
 }
 
+static void push_func(struct vm* vm, struct object_function* func) {
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_FUNCTION, .function_value = func};
+}
+
 static void push_constant(struct vm* vm, int32_t address) {
     int type = *((int32_t*)&vm->bytes[address]);
     address += sizeof(int32_t);
@@ -495,6 +604,11 @@ static void push_constant(struct vm* vm, int32_t address) {
         value = &vm->bytes[address];
         push_string(vm, value);
         return;
+    }
+
+    if (type == OBJ_FUNCTION) {
+        struct object_function* func = (struct object_function*)&vm->bytes[address];
+        push_func(vm, func);
     }
 }
 
@@ -642,6 +756,13 @@ int execute(struct vm* vm) {
                 {
                     int32_t constant = read_value_increment(int32_t);
                     push_constant(vm, constant);
+                }
+                break;
+
+            case PUSH_NUM:
+                {
+                    int32_t number = read_value_increment(int32_t);
+                    push_number(vm, number);
                 }
                 break;
 
@@ -843,6 +964,13 @@ int execute(struct vm* vm) {
             case DUP:
                 {
                     int32_t index = read_value_increment(int32_t);
+                    push(vm->stack[index]);
+                }
+                break;
+
+            case DUP_LOC:
+                {
+                    int32_t index = read_value_increment(int32_t);
                     push(vm->stack[vm->stack_base + index]);
                 }
                 break;
@@ -854,7 +982,13 @@ int execute(struct vm* vm) {
                 break;
             case CHANGE:
                 {
-                    int32_t index = read_value_increment(int32_t);
+                    int32_t index = pop_number(vm);
+                    vm->stack[index] = *pop();
+                }
+                break;
+            case CHANGE_LOC:
+                {
+                    int32_t index = pop_number(vm);
                     vm->stack[vm->stack_base + index] = *pop();
                 }
                 break;
@@ -886,22 +1020,21 @@ int execute(struct vm* vm) {
 
             case CALL:
                 {
-                    uint32_t old_base = vm->stack_base;
-                    vm->stack_base = vm->stack_size;
+                    struct object o = *pop();
 
-                    int32_t index = read_value_increment(int32_t);
-                    push_number(vm, vm->program_counter + 1);
+                    if (o.type == OBJ_FUNCTION) {
+                        if (o.function_value->type == USER) {
+                            uint32_t old_base = vm->stack_base;
+                            vm->stack_base = vm->stack_size;
 
-                    vm->program_counter = start_address + index - 1;
+                            push_number(vm, vm->program_counter + 1);
+                            push_number(vm, old_base);
 
-                    push_number(vm, old_base);
-                }
-                break;
-
-            case CALL_NATIV:
-                {
-                    int32_t index = read_value_increment(int32_t);
-                    vm->registers[RETURN_REGISTER] = builtin_functions[index](vm);
+                            vm->program_counter = start_address + o.function_value->index - 1;
+                        } else if (o.function_value->type == BUILT_IN) {
+                            vm->registers[RETURN_REGISTER] = builtin_functions[o.function_value->index](vm);
+                        }
+                    }
                 }
                 break;
             case RET:

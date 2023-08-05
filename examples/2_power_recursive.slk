@@ -6,6 +6,6 @@ def power_2(k) {
     return 2 * power_2(k - 1)
 }
 
-n = input_number("insert n for 2^n to compute: ")
+var n = input_number("insert n for 2^n to compute: ")
 print("2 to the power of " + n + " is: " + power_2(n))
 

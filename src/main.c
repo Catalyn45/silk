@@ -101,16 +101,13 @@ int main(int argc, char* argv[]) {
         puts("");
     }
 
-    uint8_t bytes[2048];
-    uint32_t n_bytes = 0;
-
     struct evaluator e = {};
     struct binary_data d = {.n_constants_bytes = sizeof(int32_t)};
     uint32_t current_stack_index = 0;
 
-    initialize_evaluator(&e);
+    add_builtin_functions(&e);
 
-    if (evaluate(ast, bytes, &n_bytes, &d, &current_stack_index, &e) != 0) {
+    if (evaluate(&e, ast, &d, &current_stack_index, 0) != 0) {
         ERROR("failed to evaluate");
         return 1;
     }
@@ -124,8 +121,8 @@ int main(int argc, char* argv[]) {
     // program start address
     *((int32_t*)bytecode) = n_bytecodes;
 
-    memcpy(bytecode + n_bytecodes, bytes, n_bytes);
-    n_bytecodes += n_bytes;
+    memcpy(bytecode + n_bytecodes, d.program_bytes, d.n_program_bytes);
+    n_bytecodes += d.n_program_bytes;
 
     if (print_bytecode) {
         disassembly(bytecode, n_bytecodes);

@@ -13,7 +13,7 @@ enum node_type {
     NODE_ASSIGN = 5,
     NODE_STATEMENT = 6,
     NODE_VAR = 7,
-    NODE_FUNCTION_CALL = 8,
+    NODE_CALL = 8,
     NODE_NOT = 9,
     NODE_FUNCTION = 10,
     NODE_DECISION = 11,
@@ -22,11 +22,12 @@ enum node_type {
     NODE_RETURN = 14,
     NODE_EXP_STATEMENT = 15,
     NODE_BOOL = 16,
-    NODE_MEMBER = 17,
+    NODE_MEMBER_ACCESS = 17,
     NODE_INDEX = 18,
     NODE_DECLARATION = 19,
     NODE_METHOD = 20,
-    NODE_CLASS = 21
+    NODE_MEMBER = 21,
+    NODE_CLASS = 22
 };
 
 enum NODE_FLAGS {

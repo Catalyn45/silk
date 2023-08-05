@@ -1,13 +1,13 @@
 def fibonacci(n) {
-    a = 0
-    b = 1
+    var a = 0
+    var b = 1
 
     if n == 0 {
         return 0
     }
 
     while n > 1 {
-        aux = b
+        var aux = b
         b = a + b
         a = aux
 
@@ -17,6 +17,6 @@ def fibonacci(n) {
     return b
 }
 
-n = input_number("insert n number to compute: ")
+var n = input_number("insert n number to compute: ")
 print(n + "th fibonacci number is: " + fibonacci(n))
 

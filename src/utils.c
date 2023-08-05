@@ -56,8 +56,12 @@ static const char* rev_node[] = {
     "RETURN",
     "EXPRESSION_STMT",
     "BOOL",
+    "MEMBER_ACCESS",
+    "INDEX",
+    "DECLARATION",
+    "METHOD",
     "MEMBER",
-    "INDEX"
+    "CLASS"
 };
 
 static const char* rev_instruction[] = {
@@ -79,14 +83,16 @@ static const char* rev_instruction[] = {
     "AND",
     "OR",
     "DUP",
+    "DUP_LOC",
     "DUP_REG",
     "CHANGE",
     "CHANGE_REG",
+    "CHANGE_LOC",
     "JMP_NOT",
     "JMP",
     "CALL",
-    "CALL_NATIV",
-    "RET"
+    "RET",
+    "PUSH_NUM"
 };
 
 void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
@@ -96,9 +102,10 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
 
         switch (bytes[i]) {
             case PUSH:
+            case PUSH_NUM:
             case DUP:
+            case DUP_LOC:
             case DUP_REG:
-            case CHANGE:
             case CHANGE_REG:
                 printf(" %d", *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
@@ -106,8 +113,6 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
 
             case JMP_NOT:
             case JMP:
-            case CALL:
-            case CALL_NATIV:
                 printf(" %d", start_address + *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;

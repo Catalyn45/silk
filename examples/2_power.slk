@@ -1,6 +1,6 @@
 def power_2(k) {
-    i = 0
-    power = 1
+    var i = 0
+    var power = 1
     while( i < k ) {
         power = power * 2
         i = i + 1
@@ -9,6 +9,6 @@ def power_2(k) {
     return power
 }
 
-n = input_number("insert n for 2^n to compute: ")
+var n = input_number("insert n for 2^n to compute: ")
 print("2 to the power of " + n + " is: " + power_2(n))
 

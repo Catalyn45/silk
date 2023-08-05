@@ -24,14 +24,16 @@ enum instructions {
     AND        = 15,
     OR         = 16,
     DUP        = 17,
-    DUP_REG    = 18,
-    CHANGE     = 19,
-    CHANGE_REG = 20,
-    JMP_NOT    = 21,
-    JMP        = 22,
-    CALL       = 23,
-    CALL_NATIV = 24,
-    RET        = 25
+    DUP_LOC    = 18,
+    DUP_REG    = 19,
+    CHANGE     = 20,
+    CHANGE_REG = 21,
+    CHANGE_LOC = 22,
+    JMP_NOT    = 23,
+    JMP        = 24,
+    CALL       = 25,
+    RET        = 26,
+    PUSH_NUM   = 27
 };
 
 struct var {
@@ -39,11 +41,6 @@ struct var {
     void* value;
     uint32_t scope;
     int32_t stack_index;
-};
-
-enum function_type {
-    USER,
-    BUILT_IN
 };
 
 struct function {
@@ -56,10 +53,29 @@ struct function {
 
 
 enum object_type {
-    OBJ_NUMBER = 0,
-    OBJ_STRING = 1,
-    OBJ_BOOL   = 2,
-    OBJ_CLASS  = 3
+    OBJ_NUMBER   = 0,
+    OBJ_STRING   = 1,
+    OBJ_BOOL     = 2,
+    OBJ_FUNCTION = 3,
+    OBJ_INSTANCE = 4
+};
+
+
+struct object_instance {
+    int32_t class_index;
+    uint32_t members[256];
+};
+
+enum function_type {
+    USER     = 0,
+    BUILT_IN = 1,
+    METHOD   = 3
+};
+
+struct object_function {
+    int32_t type;
+    int32_t index;
+    int32_t n_parameters;
 };
 
 struct object {
@@ -68,20 +84,32 @@ struct object {
         int32_t int_value;
         const char* str_value;
         bool bool_value;
-        struct object_class* object_class_value;
+        struct object_function* function_value;
+        struct object_instance* instance_value;
     };
 };
 
-struct object_class {
-    int32_t class_index;
+struct pair {
+    const char* name;
+    int32_t index;
+};
 
+struct object_class {
+    const char* name;
+
+    struct pair members[256];
     uint32_t n_members;
-    struct object members[256];
+
+    struct pair methods[256];
+    uint32_t n_methods;
 };
 
 struct evaluator {
     struct function functions[1024];
     uint32_t n_functions;
+
+    struct object_class classes[256];
+    uint32_t n_classes;
 
     struct var locals[1024];
     uint32_t n_locals;
@@ -91,12 +119,15 @@ struct binary_data {
     uint8_t constants_bytes[2048];
     uint32_t n_constants_bytes;
 
+    uint8_t classes[2048];
+    uint32_t n_classes;
+
     uint8_t program_bytes[2048];
     uint32_t n_program_bytes;
 };
 
-int initialize_evaluator(struct evaluator* e);
-int evaluate(struct node* ast, uint8_t* bytes, uint32_t* n_bytes, struct binary_data* data, uint32_t* current_stack_index, struct evaluator* e);
+int add_builtin_functions(struct evaluator* e);
+int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope);
 
 struct vm {
     uint32_t globals[2048];
