@@ -1,7 +1,7 @@
 #include "ast.h"
 #include <stdlib.h>
 
-struct node* node_new(int type, const struct token* token, struct node* left, struct node* right, uint32_t scope) {
+struct node* node_new(int type, const struct token* token, struct node* left, struct node* right) {
     struct node* n = malloc(sizeof(*n));
     if (!n) {
         return NULL;
@@ -12,7 +12,6 @@ struct node* node_new(int type, const struct token* token, struct node* left, st
         .token = token,
         .left = left,
         .right = right,
-        .scope = scope
     };
 
     return n;

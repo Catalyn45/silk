@@ -10,6 +10,14 @@
 #include <strings.h>
 #include <sys/types.h>
 
+static void add_variable(const char* var_name, uint32_t scope, uint32_t index, struct evaluator* e) {
+    e->locals[e->n_locals++] = (struct var) {
+        .name = var_name,
+        .scope = scope,
+        .stack_index = index
+    };
+}
+
 static int get_variable(const char* name, struct evaluator* e, struct var** out_var) {
     uint32_t i = e->n_locals;
 
@@ -25,14 +33,6 @@ static int get_variable(const char* name, struct evaluator* e, struct var** out_
     return 1;
 }
 
-static void add_variable(const char* var_name, uint32_t scope, uint32_t index, struct evaluator* e) {
-    e->locals[e->n_locals++] = (struct var) {
-        .name = var_name,
-        .scope = scope,
-        .stack_index = index
-    };
-}
-
 static uint32_t pop_variables(uint32_t scope, struct evaluator* e) {
     uint32_t count = 0;
 
@@ -41,20 +41,6 @@ static uint32_t pop_variables(uint32_t scope, struct evaluator* e) {
             count += 1;
 
         --(e->n_locals);
-    }
-
-    return count;
-}
-
-static uint32_t get_var_count(uint32_t scope, struct evaluator* e) {
-    uint32_t count = 0;
-    uint32_t n = e->n_locals;
-
-    while (n > 0 && e->locals[n - 1].scope > scope) {
-        if (e->locals[n - 1].stack_index >= 0)
-            count += 1;
-
-        --n;
     }
 
     return count;
@@ -131,10 +117,52 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
         memcpy(&data->program_bytes[placeholder], &data->n_program_bytes, sizeof(data->n_program_bytes)); \
     } \
 
+static struct object print_object(struct vm* vm) {
+    struct object* o = peek(0);
+
+    if (o->type == OBJ_NUMBER) {
+        printf("%d\n", o->int_value);
+    } else if (o->type == OBJ_STRING) {
+        printf("%s\n", o->str_value);
+    }
+
+    return (struct object){};
+}
+
+static struct object input_number(struct vm* vm) {
+    struct object* o = (struct object*)peek(0);
+
+    const char* input_text = o->str_value;
+    printf("%s", input_text);
+
+    int32_t number;
+    scanf("%d", &number);
+
+    puts("");
+
+    return (struct object){.type = OBJ_NUMBER, .int_value = number};
+};
+
+static struct object input_string(struct vm* vm) {
+    struct object* o = (struct object*)peek(0);
+
+    const char* input_text = o->str_value;
+    printf("%s", input_text);
+
+    char* string = malloc(200);
+    scanf("%s", string);
+
+    puts("");
+
+    return (struct object){.type = OBJ_STRING, .str_value = string};
+}
+
 int add_builtin_functions(struct evaluator* e) {
-    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "print",        .n_parameters = 1, .index = 0};
-    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_number", .n_parameters = 1, .index = 1};
-    e->functions[e->n_functions++] = (struct function){.type = BUILT_IN, .name = "input_string", .n_parameters = 1, .index = 2};
+    uint32_t index = 0;
+
+    e->functions[e->n_functions++] = (struct function){.name = "print",        .n_parameters = 1, .fun = print_object, .index = index++};
+    e->functions[e->n_functions++] = (struct function){.name = "input_number", .n_parameters = 1, .fun = input_number, .index = index++};
+    e->functions[e->n_functions++] = (struct function){.name = "input_string", .n_parameters = 1, .fun = input_string, .index = index++};
 
     return 0;
 };
@@ -159,7 +187,7 @@ static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_
     return 1;
 }
 
-int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope) {
+int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope) {
     if (ast == NULL) {
         return 0;
     }
@@ -239,8 +267,8 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 return 0;
             }
         case NODE_BINARY_OP:
-            CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate binary operation");
-            CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope),  "failed to evaluate binary operation");
+            CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate binary operation");
+            CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope),  "failed to evaluate binary operation");
 
             switch (ast->token->code) {
                 case TOK_ADD:
@@ -299,18 +327,13 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
 
         case NODE_IF:
             {
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate expression in if statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate expression in if statement");
 
                 add_instruction(JMP_NOT);
                 uint32_t placeholder_true = create_placeholder();
 
                 // true
-                CHECK(evaluate(e, ast->right->left, data, current_stack_index, function_scope), "failed to evaluate \"true\" side in if statement");
-
-                uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i) {
-                    add_instruction(POP);
-                }
+                CHECK(evaluate(e, ast->right->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate \"true\" side in if statement");
 
                 uint32_t placeholder_false;
                 if (ast->right->right) {
@@ -322,14 +345,9 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 patch_placeholder(placeholder_true);
 
                 // false
-                CHECK(evaluate(e, ast->right->right, data, current_stack_index, function_scope), "failed to evaluate \"false\" side in if statement");
+                CHECK(evaluate(e, ast->right->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate \"false\" side in if statement");
 
                 if (ast->right->right) {
-                    n_cleaned = pop_variables(ast->scope, e);
-                    for (uint32_t i = 0; i < n_cleaned; ++i) {
-                        add_instruction(POP);
-                    }
-
                     patch_placeholder(placeholder_false);
                 }
 
@@ -340,18 +358,13 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
             {
                 uint32_t start_index = data->n_program_bytes;
 
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate expression in while statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate expression in while statement");
 
                 add_instruction(JMP_NOT);
                 uint32_t placeholder_false = create_placeholder();
 
                 // body
-                CHECK(evaluate(e, ast->right->left, data, current_stack_index, function_scope), "failed to evaluate while statement body");
-
-                uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i) {
-                    add_instruction(POP);
-                }
+                CHECK(evaluate(e, ast->right->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate while statement body");
 
                 add_instruction(JMP);
                 add_number(start_index);
@@ -365,13 +378,13 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
         case NODE_DECLARATION:
             {
                 const char* var_name = ast->token->value;
-                add_variable(var_name, ast->scope, *current_stack_index, e);
+                add_variable(var_name, current_scope, *current_stack_index, e);
                 increment_index();
 
                 if (ast->left == NULL) {
                     add_instruction(PUSH_FALSE);
                 } else {
-                    CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate initialization value");
+                    CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate initialization value");
                 }
 
                 return 0;
@@ -379,7 +392,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
         case NODE_ASSIGN:
             {
                 // first evaluate value to assign
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate assignment value");
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate assignment value");
 
                 // then evaluate the lvalue
                 uint32_t lvalue_scope;
@@ -396,15 +409,26 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
             }
         case NODE_STATEMENT:
             {
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate next statement");
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate current statement");
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate next statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate current statement");
 
                 return 0;
             }
 
+        case NODE_BLOCK:
+            {
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope + 1), "failed to evaluate current statement");
+
+                uint32_t n_cleaned = pop_variables(current_scope, e);
+                for (uint32_t i = 0; i < n_cleaned; ++i) {
+                    add_instruction(POP);
+                }
+
+                return 0;
+            }
         case NODE_NOT:
             {
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate not statement");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate not statement");
                 add_instruction(NOT);
 
                 return 0;
@@ -418,32 +442,30 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 };
 
                 // evaluate members
-                evaluate(e, ast->left, data, current_stack_index, function_scope);
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate class members");
 
                 // evaluate methods
-                evaluate(e, ast->right, data, current_stack_index, function_scope);
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate class methods");
 
                 return 0;
             }
 
         case NODE_MEMBER:
             {
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate next member");
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate next member");
 
                 struct object_class* current_class = &e->classes[e->n_classes - 1];
                 current_class->members[current_class->n_members++] = (struct pair){
-                    ast->left->token->value,
+                    ast->token->value,
                     data->n_program_bytes
                 };
-
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate member");
 
                 return 0;
             }
 
         case NODE_METHOD:
             {
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope), "failed to evaluate next method");
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate next method");
 
                 struct object_class* current_class = &e->classes[e->n_classes - 1];
                 current_class->methods[current_class->n_methods++] = (struct pair){
@@ -451,7 +473,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                     data->n_program_bytes
                 };
 
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate method");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate method");
 
                 return 0;
             }
@@ -484,24 +506,19 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 add_instruction(JMP);
                 uint32_t placeholder = create_placeholder();
 
-                add_variable(fun_name, ast->scope, *current_stack_index, e);
+                add_variable(fun_name, current_scope, *current_stack_index, e);
                 increment_index();
 
                 parameter = ast->left;
                 while (parameter) {
                     --n_parameters;
-                    add_variable(parameter->token->value, ast->scope + 1, -1 - n_parameters, e);
+                    add_variable(parameter->token->value, current_scope + 1, -1 - n_parameters, e);
                     parameter = parameter->right;
                 }
 
                 // the first 2 are old base and return address
                 uint32_t new_stack_index = 2;
-                CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1), "failed to evaluate function body");
-
-                uint32_t n_cleaned = pop_variables(ast->scope, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i) {
-                    add_instruction(POP);
-                }
+                CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1, current_scope), "failed to evaluate function body");
 
                 // TODO: double ret in case of return
                 add_instruction(RET);
@@ -517,12 +534,12 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 struct node* argument = ast->right;
 
                 while (argument) {
-                    CHECK(evaluate(e, argument->left, data, current_stack_index, function_scope), "failed to evaluate function argument");
+                    CHECK(evaluate(e, argument->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate function argument");
                     argument = argument->right;
                     ++n_arguments;
                 }
 
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate lvalue to call");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate lvalue to call");
                 add_instruction(CALL);
 
                 for (uint32_t i = 0; i < n_arguments; ++i) {
@@ -534,18 +551,16 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
 
                 return 0;
             }
-
+        case NODE_MEMBER_ACCESS:
+            {
+                
+            }
         case NODE_RETURN:
             {
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate return value");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate return value");
 
                 add_instruction(CHANGE_REG);
                 add_number(RETURN_REGISTER);
-
-                uint32_t n_cleaned = get_var_count(0, e);
-                for (uint32_t i = 0; i < n_cleaned; ++i) {
-                    add_instruction(POP);
-                }
 
                 add_instruction(RET);
 
@@ -553,7 +568,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
             }
         case NODE_EXP_STATEMENT:
             {
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope), "failed to evaluate return value");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate return value");
                 add_instruction(POP);
 
                 return 0;
@@ -612,15 +627,6 @@ static void push_constant(struct vm* vm, int32_t address) {
     }
 }
 
-#define push(o) \
-    vm->stack[vm->stack_size++] = o
-
-#define pop() \
-    (&vm->stack[--vm->stack_size])
-
-#define peek(n) \
-    (&vm->stack[vm->stack_size - 1 - n])
-
 static int32_t pop_number(struct vm* vm) {
     struct object* obj = pop();
     return obj->int_value;
@@ -672,53 +678,6 @@ bool pop_bool_check(struct vm* vm, bool* out_bool) {
     return 0;
 }
 
-typedef struct object (*builtin_fun)(struct vm* vm);
-
-static struct object print_object(struct vm* vm) {
-    struct object* o = peek(0);
-
-    if (o->type == OBJ_NUMBER) {
-        printf("%d\n", o->int_value);
-    } else if (o->type == OBJ_STRING) {
-        printf("%s\n", o->str_value);
-    }
-
-    return (struct object){};
-}
-
-static struct object input_number(struct vm* vm) {
-    struct object* o = (struct object*)peek(0);
-
-    const char* input_text = o->str_value;
-    printf("%s", input_text);
-
-    int32_t number;
-    scanf("%d", &number);
-
-    puts("");
-
-    return (struct object){.type = OBJ_NUMBER, .int_value = number};
-};
-
-static struct object input_string(struct vm* vm) {
-    struct object* o = (struct object*)peek(0);
-
-    const char* input_text = o->str_value;
-    printf("%s", input_text);
-
-    char* string = malloc(200);
-    scanf("%s", string);
-
-    puts("");
-
-    return (struct object){.type = OBJ_STRING, .str_value = string};
-}
-
-static builtin_fun builtin_functions[] = {
-    print_object,
-    input_number,
-    input_string
-};
 
 static int add_strings(struct vm* vm, struct object* value1, struct object* value2) {
     char* new_string = malloc(500);
@@ -1032,13 +991,14 @@ int execute(struct vm* vm) {
 
                             vm->program_counter = start_address + o.function_value->index - 1;
                         } else if (o.function_value->type == BUILT_IN) {
-                            vm->registers[RETURN_REGISTER] = builtin_functions[o.function_value->index](vm);
+                            vm->registers[RETURN_REGISTER] = vm->builtin_functions[o.function_value->index].fun(vm);
                         }
                     }
                 }
                 break;
             case RET:
                 {
+                    vm->stack_size = vm->stack_base + 2;
                     vm->stack_base = pop_number(vm);
                     int32_t index = pop_number(vm);
 

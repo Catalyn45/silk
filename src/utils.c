@@ -35,7 +35,10 @@ const char* rev_tokens[] = {
     "def",
     "return",
     "true",
-    "false"
+    "false",
+    ".",
+    "var",
+    "class"
 };
 
 static const char* rev_node[] = {
@@ -61,7 +64,8 @@ static const char* rev_node[] = {
     "DECLARATION",
     "METHOD",
     "MEMBER",
-    "CLASS"
+    "CLASS",
+    "BLOCK"
 };
 
 static const char* rev_instruction[] = {
@@ -122,19 +126,19 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
     }
 }
 
-void dump_ast(struct node* root, int indent, bool is_statement) {
+void dump_ast(struct node* root, int indent) {
     if (!root)
         return;
+
+    if (root->type == NODE_STATEMENT || root->type == NODE_PARAMETER || root->type == NODE_ARGUMENT) {
+        dump_ast(root->right, indent);
+    }
 
     for (int i = 0; i < indent - 4; ++i)
         printf(" ");
 
     if (indent > 0) {
-        if (is_statement) {
-            printf("    ");
-        } else {
-            printf("└── ");
-        }
+        printf("└── ");
     }
 
     printf("%s", rev_node[root->type]);
@@ -151,24 +155,21 @@ void dump_ast(struct node* root, int indent, bool is_statement) {
         printf("\n");
     }
 
-    if (root->type == NODE_STATEMENT) {
-        dump_ast(root->left, indent+4, false);
-        dump_ast(root->right, indent, true);
-        return;
-    }
+    dump_ast(root->left, indent+4);
 
-    dump_ast(root->left, indent+4, false);
-    dump_ast(root->right, indent+4, false);
+    if (root->type != NODE_STATEMENT && root->type != NODE_PARAMETER && root->type != NODE_ARGUMENT) {
+        dump_ast(root->right, indent+4);
+    }
 }
 
-#define N_POSITION 10
+#define N_POSITION 30
 #define min(a, b) ((a) < (b) ? a : b)
 #define max(a, b) ((a) > (b) ? a : b)
 
 
-void print_program_error(const char* text, uint32_t index) {
-    uint32_t i = max(0, index - N_POSITION);
-    uint32_t start_index = index;
+void print_program_error(const char* text, int32_t index) {
+    int32_t i = max(0, index - N_POSITION);
+    int32_t start_index = index;
 
     while (start_index >= i && text[start_index] != '\n')
         --start_index;

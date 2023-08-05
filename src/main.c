@@ -93,11 +93,16 @@ int main(int argc, char* argv[]) {
     res = parse(&parser, &ast);
     if (res != 0) {
         ERROR("failed to parse");
+
+        const struct token* token = &parser.tokens[parser.current_index];
+        ERROR("at line %d", token->line);
+        print_program_error(parser.text, token->index);
+
         return 1;
     }
 
     if (print_ast) {
-        dump_ast(ast, 0, false);
+        dump_ast(ast, 0);
         puts("");
     }
 
@@ -107,7 +112,7 @@ int main(int argc, char* argv[]) {
 
     add_builtin_functions(&e);
 
-    if (evaluate(&e, ast, &d, &current_stack_index, 0) != 0) {
+    if (evaluate(&e, ast, &d, &current_stack_index, 0, -1) != 0) {
         ERROR("failed to evaluate");
         return 1;
     }
@@ -133,6 +138,7 @@ int main(int argc, char* argv[]) {
         struct vm vm = {
             .bytes = bytecode,
             .n_bytes = n_bytecodes,
+            .builtin_functions = e.functions
         };
 
         if (execute(&vm) != 0) {

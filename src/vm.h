@@ -36,6 +36,15 @@ enum instructions {
     PUSH_NUM   = 27
 };
 
+#define push(o) \
+    vm->stack[vm->stack_size++] = o
+
+#define pop() \
+    (&vm->stack[--vm->stack_size])
+
+#define peek(n) \
+    (&vm->stack[vm->stack_size - 1 - n])
+
 struct var {
     const char* name;
     void* value;
@@ -43,14 +52,15 @@ struct var {
     int32_t stack_index;
 };
 
-struct function {
-    int type;
-    const char* name;
+struct vm;
+typedef struct object (*builtin_fun)(struct vm* vm);
 
+struct function {
+    const char* name;
     uint32_t n_parameters;
     uint32_t index;
+    builtin_fun fun;
 };
-
 
 enum object_type {
     OBJ_NUMBER   = 0,
@@ -127,9 +137,11 @@ struct binary_data {
 };
 
 int add_builtin_functions(struct evaluator* e);
-int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope);
+int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope);
 
 struct vm {
+    struct function* builtin_functions;
+
     uint32_t globals[2048];
     struct object stack[2048];
 

@@ -42,7 +42,7 @@ static int parse_primary(struct parser* parser, struct node** root) {
     if (current_token->code == TOK_INT) {
         advance();
 
-        struct node* node_num = node_new(NODE_NUMBER, current_token, NULL, NULL, parser->current_scope);
+        struct node* node_num = node_new(NODE_NUMBER, current_token, NULL, NULL);
         CHECK_NODE(node_num);
 
         *root = node_num;
@@ -52,7 +52,7 @@ static int parse_primary(struct parser* parser, struct node** root) {
     if (current_token->code == TOK_TRU || current_token->code == TOK_FAL) {
         advance();
 
-        struct node* node_bool = node_new(NODE_BOOL, current_token, NULL, NULL, parser->current_scope);
+        struct node* node_bool = node_new(NODE_BOOL, current_token, NULL, NULL);
         CHECK_NODE(node_bool);
 
         *root = node_bool;
@@ -62,7 +62,7 @@ static int parse_primary(struct parser* parser, struct node** root) {
     if (current_token->code == TOK_STR) {
         advance();
 
-        struct node* node_num = node_new(NODE_STRING, current_token, NULL, NULL, parser->current_scope);
+        struct node* node_num = node_new(NODE_STRING, current_token, NULL, NULL);
         CHECK_NODE(node_num);
 
         *root = node_num;
@@ -71,7 +71,7 @@ static int parse_primary(struct parser* parser, struct node** root) {
 
     if (current_token->code == TOK_IDN) {
         advance();
-        struct node* node_var = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
+        struct node* node_var = node_new(NODE_VAR, current_token, NULL, NULL);
         CHECK_NODE(node_var);
         node_var->flags |= (LVALUE | CALLABLE);
 
@@ -104,7 +104,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
             current_token = get_token();
         }
 
-        arguments = node_new(NODE_ARGUMENT, NULL, argument, arguments, parser->current_scope);
+        arguments = node_new(NODE_ARGUMENT, NULL, argument, arguments);
         CHECK_NODE(arguments);
     }
 
@@ -124,7 +124,7 @@ static int parse_postfix(struct parser* parser, struct node** root) {
         if (current_token->code == TOK_LPR && (left->flags & CALLABLE)) {
             struct node* function_parameters = NULL;
             CHECK(parse_argument_list(parser, &function_parameters), "failed to parse argument list");
-            struct node* function_node = node_new(NODE_CALL, NULL, left, function_parameters, parser->current_scope);
+            struct node* function_node = node_new(NODE_CALL, NULL, left, function_parameters);
             function_node->flags |= CALLABLE;
 
             left = function_node;
@@ -135,10 +135,10 @@ static int parse_postfix(struct parser* parser, struct node** root) {
 
             EXPECT_TOKEN(current_token->code, TOK_IDN);
 
-            struct node* identifier = node_new(NODE_VAR, current_token, NULL, NULL, parser->current_scope);
+            struct node* identifier = node_new(NODE_VAR, current_token, NULL, NULL);
             CHECK_NODE(identifier);
 
-            struct node* member_access = node_new(NODE_MEMBER_ACCESS, NULL, left, identifier, parser->current_scope);
+            struct node* member_access = node_new(NODE_MEMBER_ACCESS, NULL, left, identifier);
             CHECK_NODE(member_access);
 
             member_access->flags |= (LVALUE | CALLABLE);
@@ -155,7 +155,7 @@ static int parse_postfix(struct parser* parser, struct node** root) {
             EXPECT_TOKEN(current_token->code, TOK_RSQ);
             advance();
 
-            struct node* index_access = node_new(NODE_INDEX, NULL, left, expression, parser->current_scope);
+            struct node* index_access = node_new(NODE_INDEX, NULL, left, expression);
             CHECK_NODE(index_access);
 
             index_access->flags |= (LVALUE | CALLABLE);
@@ -180,7 +180,7 @@ static int parse_unary(struct parser* parser, struct node** root) {
         struct node* not_unary;
         CHECK(parse_unary(parser, &not_unary), "failed to parse unary");
 
-        struct node* not_node = node_new(NODE_NOT, NULL, not_unary, NULL, parser->current_scope);
+        struct node* not_node = node_new(NODE_NOT, NULL, not_unary, NULL);
         CHECK_NODE(not_node);
 
         *root = not_node;
@@ -206,7 +206,7 @@ static int parse_multiplicative(struct parser* parser, struct node** root) {
         struct node* right;
         CHECK(parse_unary(parser, &right), "failed to parse unary");
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
 
         left = bin_op;
@@ -232,7 +232,7 @@ static int parse_additive(struct parser* parser, struct node** root) {
         struct node* right;
         CHECK(parse_multiplicative(parser, &right), "failed to parse multiplicative");
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
 
         left = bin_op;
@@ -260,7 +260,7 @@ static int parse_relational(struct parser* parser, struct node** root) {
         struct node* right;
         CHECK(parse_additive(parser, &right), "failed to parse additive");
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
 
         left = bin_op;
@@ -283,7 +283,7 @@ static int parse_equality(struct parser* parser, struct node** root) {
         struct node* right;
         CHECK(parse_relational(parser, &right), "failed to parse relational");
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
 
         left = bin_op;
@@ -306,7 +306,7 @@ static int parse_and(struct parser* parser, struct node** root) {
         struct node* right;
         CHECK(parse_equality(parser, &right), "failed to parse equality");
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
 
         left = bin_op;
@@ -329,7 +329,7 @@ static int parse_or(struct parser* parser, struct node** root) {
         struct node* right;
         CHECK(parse_and(parser, &right), "failed to parse and");
 
-        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right, parser->current_scope);
+        struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
 
         left = bin_op;
@@ -357,14 +357,14 @@ static int parse_expression_statement(struct parser* parser, struct node** root)
         struct node* assignment_value;
         CHECK(parse_expression(parser, &assignment_value), "failed to parse expression");
 
-        struct node* assignment_node = node_new(NODE_ASSIGN, NULL, expression, assignment_value, parser->current_scope);
+        struct node* assignment_node = node_new(NODE_ASSIGN, NULL, expression, assignment_value);
         CHECK_NODE(assignment_node);
 
         *root = assignment_node;
         return 0;
     }
 
-    struct node* expression_statement_node = node_new(NODE_EXP_STATEMENT, NULL, expression, NULL, parser->current_scope);
+    struct node* expression_statement_node = node_new(NODE_EXP_STATEMENT, NULL, expression, NULL);
     CHECK_NODE(expression_statement_node);
 
     *root = expression_statement_node;
@@ -393,10 +393,10 @@ static int parse_if(struct parser* parser, struct node** root ) {
         CHECK(parse_block(parser, &false_side, true), "failed to parse block");
     }
 
-    struct node* decision = node_new(NODE_DECISION, NULL, true_side, false_side, parser->current_scope);
+    struct node* decision = node_new(NODE_DECISION, NULL, true_side, false_side);
     CHECK_NODE(decision);
 
-    struct node* if_node = node_new(NODE_IF, NULL, if_expression, decision, parser->current_scope);
+    struct node* if_node = node_new(NODE_IF, NULL, if_expression, decision);
     CHECK_NODE(if_node);
 
     *root = if_node;
@@ -415,10 +415,10 @@ static int parse_while(struct parser* parser, struct node** root ) {
     struct node* true_side;
     CHECK(parse_block(parser, &true_side, true), "failed to parse block");
 
-    struct node* decision = node_new(NODE_DECISION, NULL, true_side, NULL, parser->current_scope);
+    struct node* decision = node_new(NODE_DECISION, NULL, true_side, NULL);
     CHECK_NODE(decision);
 
-    struct node* while_node = node_new(NODE_WHILE, NULL, while_expression, decision, parser->current_scope);
+    struct node* while_node = node_new(NODE_WHILE, NULL, while_expression, decision);
     CHECK_NODE(while_node);
 
     *root = while_node;
@@ -449,7 +449,7 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
             current_token = get_token();
         }
 
-        parameters = node_new(NODE_PARAMETER, parameter_name, NULL, parameters, parser->current_scope);
+        parameters = node_new(NODE_PARAMETER, parameter_name, NULL, parameters);
         CHECK_NODE(parameters);
     }
 
@@ -475,7 +475,7 @@ static int parse_function(struct parser* parser, struct node** root) {
     struct node* body;
     CHECK(parse_block(parser, &body, true), "failed to parse block");
 
-    struct node* function = node_new(NODE_FUNCTION, function_name, arguments, body, parser->current_scope);
+    struct node* function = node_new(NODE_FUNCTION, function_name, arguments, body);
     CHECK_NODE(function);
 
     *root = function;
@@ -491,7 +491,7 @@ static int parse_return(struct parser* parser, struct node** root ) {
     struct node* expression;
     CHECK(parse_expression(parser, &expression), "failed to parse expression");
 
-    struct node* return_node = node_new(NODE_RETURN, NULL, expression, NULL, parser->current_scope);
+    struct node* return_node = node_new(NODE_RETURN, NULL, expression, NULL);
     CHECK_NODE(return_node);
 
     *root = return_node;
@@ -518,14 +518,33 @@ static int parse_declaration(struct parser* parser, struct node** root ) {
         CHECK(parse_expression(parser, &init_value), "failed to parse expression");
     }
 
-    struct node* declaration = node_new(NODE_DECLARATION, identifier, init_value, NULL, parser->current_scope);
+    struct node* declaration = node_new(NODE_DECLARATION, identifier, init_value, NULL);
     CHECK_NODE(declaration);
 
     *root = declaration;
     return 0;
 }
 
-static int parse_class(struct parser* parser, struct node** root ) {
+static int parse_member(struct parser* parser, struct node** root) {
+    const struct token* current_token = get_token();
+
+    EXPECT_TOKEN(current_token->code, TOK_VAR);
+    advance();
+
+    current_token = get_token();
+    EXPECT_TOKEN(current_token->code, TOK_IDN);
+    advance();
+
+    const struct token* identifier = current_token;
+
+    struct node* member = node_new(NODE_MEMBER, identifier, NULL, NULL);
+    CHECK_NODE(member);
+
+    *root = member;
+    return 0;
+}
+
+static int parse_class(struct parser* parser, struct node** root) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_CLS);
@@ -546,8 +565,8 @@ static int parse_class(struct parser* parser, struct node** root ) {
     struct node* members = NULL;
     while (current_token->code == TOK_VAR) {
         struct node* member;
-        CHECK(parse_declaration(parser, &member), "failed to parse member");
-        members = node_new(NODE_MEMBER, NULL, member, members, parser->current_scope);
+        CHECK(parse_member(parser, &member), "failed to parse member");
+        members = node_new(NODE_MEMBER, NULL, member, members);
         CHECK_NODE(members);
 
         current_token = get_token();
@@ -557,7 +576,7 @@ static int parse_class(struct parser* parser, struct node** root ) {
     while (current_token->code == TOK_FUN) {
         struct node* method;
         CHECK(parse_function(parser, &method), "failed to parse method");
-        methods = node_new(NODE_METHOD, NULL, method, methods, parser->current_scope);
+        methods = node_new(NODE_METHOD, NULL, method, methods);
         CHECK_NODE(methods);
 
         current_token = get_token();
@@ -566,7 +585,7 @@ static int parse_class(struct parser* parser, struct node** root ) {
     EXPECT_TOKEN(current_token->code, TOK_RBR);
     advance();
 
-    struct node* class_node = node_new(NODE_CLASS, class_name, members, methods, parser->current_scope);
+    struct node* class_node = node_new(NODE_CLASS, class_name, members, methods);
     CHECK_NODE(class_node);
 
     *root = class_node;
@@ -616,16 +635,14 @@ static int parse_block(struct parser* parser, struct node** root, bool brackets)
     if (brackets) {
         EXPECT_TOKEN(current_token->code, TOK_LBR);
         advance();
-
-        ++parser->current_scope;
     }
 
-    struct node* statements = NULL;;
+    struct node* statements = NULL;
     while (current_token->code != TOK_RBR && current_token->code != TOK_EOF) {
         struct node* statement;
         CHECK(parse_statement(parser, &statement), "failed to parse statement");
 
-        statements = node_new(NODE_STATEMENT, NULL, statement, statements, parser->current_scope);
+        statements = node_new(NODE_STATEMENT, NULL, statement, statements);
         CHECK_NODE(statements);
 
         current_token = get_token();
@@ -634,24 +651,18 @@ static int parse_block(struct parser* parser, struct node** root, bool brackets)
     if (brackets) {
         EXPECT_TOKEN(current_token->code, TOK_RBR);
         advance();
-
-        --parser->current_scope;
     } else {
         EXPECT_TOKEN(current_token->code, TOK_EOF);
     }
 
-    *root = statements;
+    struct node* block = node_new(NODE_BLOCK, NULL, statements, NULL);
+    CHECK_NODE(block);
+
+    *root = block;
     return 0;
 }
 
 int parse(struct parser* parser, struct node** root) {
-    uint32_t current_index = 0;
-    int res = parse_block(parser, root, false);
-    if (res != 0) {
-        const struct token* token = &parser->tokens[current_index];
-        ERROR("at line %d", token->line);
-        print_program_error(parser->text, token->index);
-    }
-
-    return res;
+    CHECK(parse_block(parser, root, false), "failed to parse block");
+    return 0;
 }

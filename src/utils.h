@@ -7,8 +7,8 @@
 struct node;
 
 void disassembly(const uint8_t* bytes, uint32_t n_bytes);
-void dump_ast(struct node* root, int indent, bool is_statement);
-void print_program_error(const char* text, uint32_t index);
+void dump_ast(struct node* root, int indent);
+void print_program_error(const char* text, int32_t index);
 extern const char* rev_tokens[];
 
 #define ERROR(message, ...) \
