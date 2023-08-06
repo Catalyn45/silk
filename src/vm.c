@@ -89,6 +89,14 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
         return 0;
     }
 
+    if (o->type == OBJ_CLASS) {
+        *(struct object_class*)(&data->constants_bytes[data->n_constants_bytes]) = *o->class_value;
+        data->n_constants_bytes += sizeof(struct object_class);
+
+        *out_address = constant_address;
+        return 0;
+    }
+
     return 1;
 }
 
@@ -168,7 +176,7 @@ int add_builtin_functions(struct evaluator* e) {
 };
 
 
-static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* out_scope) {
+static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope) {
     switch (ast->type) {
         case NODE_VAR:
             {
@@ -177,11 +185,72 @@ static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_
                 if (res == 0) {
                     add_instruction(PUSH_NUM);
                     add_number(variable->stack_index);
-                    *out_scope = variable->scope;
+
+                    // variable outside of function
+                    if (variable->scope < function_scope) {
+                        add_instruction(CHANGE);
+                    } else {
+                        add_instruction(CHANGE_LOC);
+                    }
 
                     return 0;
                 }
+
+                return 1;
             }
+        case NODE_MEMBER_ACCESS:
+            {
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate left member of member access");
+
+                int32_t out_address;
+                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value}, &out_address);
+
+                add_instruction(PUSH);
+                add_number(out_address);
+
+                add_instruction(SET_FIELD);
+
+                return 0;
+            }
+        default:
+            return 1;
+    }
+
+    return 1;
+}
+
+static int evaluate_class(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope, struct object_class* current_class) {
+    if (ast == NULL)
+        return 0;
+
+    switch (ast->type) {
+        case NODE_METHOD_FUN:
+            {
+                current_class->methods[current_class->n_methods++] = (struct pair){
+                    .name = ast->token->value,
+                    .index = data->n_program_bytes + sizeof(int32_t) + 1
+                };
+
+                CHECK(evaluate(e, ast, data, current_stack_index, function_scope, current_scope), "failed to evaluate method");
+                return 0;
+            }
+        case NODE_MEMBER:
+            {
+                CHECK(evaluate_class(e, ast->right, data, current_stack_index, function_scope, current_scope, current_class), "failed to evaluate next member");
+                current_class->members[current_class->n_members++] = ast->token->value;
+
+                return 0;
+            }
+
+        case NODE_METHOD:
+            {
+                CHECK(evaluate_class(e, ast->right, data, current_stack_index, function_scope, current_scope, current_class), "failed to evaluate next method");
+                CHECK(evaluate_class(e, ast->left, data, current_stack_index, function_scope, current_scope, current_class), "failed to evaluate next method");
+
+                return 0;
+            }
+        default:
+            return 1;
     }
 
     return 1;
@@ -395,15 +464,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate assignment value");
 
                 // then evaluate the lvalue
-                uint32_t lvalue_scope;
-                CHECK(evaluate_lvalue(e, ast->left, data, &lvalue_scope), "failed to evaluate lvalue");
-
-                // variable outside of function
-                if (lvalue_scope < function_scope) {
-                    add_instruction(CHANGE);
-                } else {
-                    add_instruction(CHANGE_LOC);
-                }
+                CHECK(evaluate_lvalue(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate lvalue");
 
                 return 0;
             }
@@ -437,46 +498,31 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
         case NODE_CLASS:
             {
                 const char* class_name = ast->token->value;
-                e->classes[e->n_classes++] = (struct object_class) {
-                    .name = class_name
+                struct object cls = {
+                    .type = OBJ_CLASS,
+                    .class_value = &(struct object_class) {
+                        .name = class_name
+                    }
                 };
 
                 // evaluate members
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate class members");
+                CHECK(evaluate_class(e, ast->left, data, current_stack_index, function_scope, current_scope, cls.class_value), "failed to evaluate class members");
 
                 // evaluate methods
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate class methods");
+                CHECK(evaluate_class(e, ast->right, data, current_stack_index, function_scope, current_scope, cls.class_value), "failed to evaluate class methods");
+
+                int32_t out_address;
+                add_constant(data, &cls, &out_address);
+
+                add_instruction(PUSH);
+                add_number(out_address);
+
+                add_variable(class_name, current_scope, *current_stack_index, e);
+                increment_index();
 
                 return 0;
             }
 
-        case NODE_MEMBER:
-            {
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate next member");
-
-                struct object_class* current_class = &e->classes[e->n_classes - 1];
-                current_class->members[current_class->n_members++] = (struct pair){
-                    ast->token->value,
-                    data->n_program_bytes
-                };
-
-                return 0;
-            }
-
-        case NODE_METHOD:
-            {
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate next method");
-
-                struct object_class* current_class = &e->classes[e->n_classes - 1];
-                current_class->methods[current_class->n_methods++] = (struct pair){
-                    ast->left->token->value,
-                    data->n_program_bytes
-                };
-
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate method");
-
-                return 0;
-            }
         case NODE_FUNCTION:
             {
                 uint32_t n_parameters = 0;
@@ -528,6 +574,42 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 return 0;
             }
 
+        case NODE_METHOD_FUN:
+            {
+                uint32_t n_parameters = 0;
+
+                struct node* parameter = ast->left;
+                while (parameter) {
+                    parameter = parameter->right;
+                    ++n_parameters;
+                }
+                ++n_parameters;
+
+                add_instruction(JMP);
+                uint32_t placeholder = create_placeholder();
+
+                parameter = ast->left;
+                while (parameter) {
+                    --n_parameters;
+                    add_variable(parameter->token->value, current_scope + 1, -1 - n_parameters, e);
+                    parameter = parameter->right;
+                }
+
+                --n_parameters;
+                add_variable("self", current_scope + 1, -1 - n_parameters, e);
+
+                // the first 2 are old base and return address
+                uint32_t new_stack_index = 2;
+                CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1, current_scope), "failed to evaluate function body");
+
+                // TODO: double ret in case of return
+                add_instruction(RET);
+
+                patch_placeholder(placeholder);
+
+                return 0;
+            }
+
         case NODE_CALL:
             {
                 uint32_t n_arguments = 0;
@@ -553,7 +635,17 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
             }
         case NODE_MEMBER_ACCESS:
             {
-                
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate left member of member access");
+
+                int32_t out_address;
+                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value}, &out_address);
+
+                add_instruction(PUSH);
+                add_number(out_address);
+
+                add_instruction(GET_FIELD);
+
+                return 0;
             }
         case NODE_RETURN:
             {
@@ -604,6 +696,10 @@ static void push_func(struct vm* vm, struct object_function* func) {
     vm->stack[vm->stack_size++] = (struct object){.type = OBJ_FUNCTION, .function_value = func};
 }
 
+static void push_class(struct vm* vm, struct object_class* cls) {
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_CLASS, .class_value = cls};
+}
+
 static void push_constant(struct vm* vm, int32_t address) {
     int type = *((int32_t*)&vm->bytes[address]);
     address += sizeof(int32_t);
@@ -624,6 +720,13 @@ static void push_constant(struct vm* vm, int32_t address) {
     if (type == OBJ_FUNCTION) {
         struct object_function* func = (struct object_function*)&vm->bytes[address];
         push_func(vm, func);
+        return;
+    }
+
+    if (type == OBJ_CLASS) {
+        struct object_class* cls = (struct object_class*)&vm->bytes[address];
+        push_class(vm, cls);
+        return;
     }
 }
 
@@ -649,6 +752,7 @@ static const char* pop_string(struct vm* vm) {
     struct object* obj = pop();
     return obj->str_value;
 }
+*/
 
 static int pop_string_check(struct vm* vm, const char** out_string) {
     struct object* obj = pop();
@@ -660,7 +764,6 @@ static int pop_string_check(struct vm* vm, const char** out_string) {
     *out_string = obj->str_value;
     return 0;
 }
-*/
 
 bool pop_bool(struct vm* vm) {
     struct object* obj = pop();
@@ -706,8 +809,7 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
 }
 
 int execute(struct vm* vm) {
-    int32_t start_address = *(int32_t*)vm->bytes;
-    vm->program_counter = start_address;
+    vm->program_counter = vm->start_address;
 
     while (!vm->halt && vm->program_counter < vm->n_bytes) {
         switch (vm->bytes[vm->program_counter]) {
@@ -965,7 +1067,7 @@ int execute(struct vm* vm) {
                     CHECK(pop_bool_check(vm, &condition), "operand for jump operation is not bool");
 
                     if (!condition) {
-                        vm->program_counter = start_address + index - 1;
+                        vm->program_counter = vm->start_address + index - 1;
                     }
                 }
                 break;
@@ -973,7 +1075,7 @@ int execute(struct vm* vm) {
             case JMP:
                 {
                     int32_t index = read_value(int32_t);
-                    vm->program_counter = start_address + index - 1;
+                    vm->program_counter = vm->start_address + index - 1;
                 }
                 break;
 
@@ -981,19 +1083,113 @@ int execute(struct vm* vm) {
                 {
                     struct object o = *pop();
 
+                    if (o.type == OBJ_CLASS) {
+                        struct object_class* cls = o.class_value;
+
+                        struct object_instance* value = malloc(sizeof(*value));
+                        if (value == NULL)
+                            return 1;
+
+                        *value = (struct object_instance) {
+                            .class_index = cls
+                        };
+
+                        struct object o = (struct object) {
+                            .type = OBJ_INSTANCE,
+                            .instance_value = value
+                        };
+
+                        uint32_t i;
+                        for (i = 0; i < cls->n_methods; ++i) {
+                            // TODO: this don't need to have return
+                            if (strcmp(cls->methods[i].name, "constructor") == 0) {
+                                push(o);
+
+                                uint32_t old_base = vm->stack_base;
+                                vm->stack_base = vm->stack_size;
+
+                                push_number(vm, vm->program_counter + 1);
+                                push_number(vm, old_base);
+
+                                vm->program_counter = vm->start_address + cls->methods[i].index - 1;
+                                break;
+                            }
+                        }
+
+                        if (i == cls->n_methods)
+                            vm->registers[RETURN_REGISTER] = o;
+
+                        break;
+                    }
+
                     if (o.type == OBJ_FUNCTION) {
-                        if (o.function_value->type == USER) {
+                        if (o.function_value->type == USER || o.function_value->type == METHOD) {
+                            if (o.function_value->type == METHOD) {
+                                push(o.function_value->context);
+                            }
+
                             uint32_t old_base = vm->stack_base;
                             vm->stack_base = vm->stack_size;
 
                             push_number(vm, vm->program_counter + 1);
                             push_number(vm, old_base);
 
-                            vm->program_counter = start_address + o.function_value->index - 1;
+                            vm->program_counter = vm->start_address + o.function_value->index - 1;
                         } else if (o.function_value->type == BUILT_IN) {
                             vm->registers[RETURN_REGISTER] = vm->builtin_functions[o.function_value->index].fun(vm);
                         }
                     }
+                }
+                break;
+
+            case GET_FIELD:
+                {
+                    const char* field_name;
+                    CHECK(pop_string_check(vm, &field_name), "field name is not a string");
+
+                    struct object* instance = pop();
+                    struct object_class* cls = instance->instance_value->class_index;
+
+                    uint32_t i = 0;
+                    for (i = 0; i < cls->n_members; ++i) {
+                        if (strcmp(cls->members[i], field_name) == 0) {
+                            push(instance->instance_value->members[i]);
+                            break;
+                        }
+                    }
+
+                    if (i == cls->n_members) {
+                        for (i = 0; i < cls->n_methods; ++i) {
+                            if (strcmp(cls->methods[i].name, field_name) == 0) {
+                                push_func(vm, &(struct object_function){.type = METHOD, .index = cls->methods[i].index, .n_parameters = cls->methods[i].n_parameters, .context = *instance});
+                                break;
+                            }
+                        }
+                    }
+
+                    if (i == cls->n_methods)
+                        return 1;
+                }
+                break;
+
+            case SET_FIELD:
+                {
+                    const char* field_name;
+                    CHECK(pop_string_check(vm, &field_name), "field name is not a string");
+
+                    struct object* instance = pop();
+                    struct object_class* cls = instance->instance_value->class_index;
+
+                    uint32_t i;
+                    for (i = 0; i < cls->n_members; ++i) {
+                        if (strcmp(cls->members[i], field_name) == 0) {
+                            instance->instance_value->members[i] = *pop();
+                            break;
+                        }
+                    }
+
+                    if (i == cls->n_members)
+                        return 1;
                 }
                 break;
             case RET:

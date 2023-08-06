@@ -28,7 +28,8 @@ enum node_type {
     NODE_METHOD        = 20,
     NODE_MEMBER        = 21,
     NODE_CLASS         = 22,
-    NODE_BLOCK         = 23
+    NODE_BLOCK         = 23,
+    NODE_METHOD_FUN    = 24
 };
 
 enum NODE_FLAGS {

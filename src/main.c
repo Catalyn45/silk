@@ -123,14 +123,14 @@ int main(int argc, char* argv[]) {
     memcpy(bytecode, d.constants_bytes, d.n_constants_bytes);
     n_bytecodes += d.n_constants_bytes;
 
-    // program start address
-    *((int32_t*)bytecode) = n_bytecodes;
+    uint32_t start_address = n_bytecodes;
 
+    // program start address
     memcpy(bytecode + n_bytecodes, d.program_bytes, d.n_program_bytes);
     n_bytecodes += d.n_program_bytes;
 
     if (print_bytecode) {
-        disassembly(bytecode, n_bytecodes);
+        disassembly(bytecode, n_bytecodes, start_address);
         puts("");
     }
 
@@ -138,6 +138,7 @@ int main(int argc, char* argv[]) {
         struct vm vm = {
             .bytes = bytecode,
             .n_bytes = n_bytecodes,
+            .start_address = start_address,
             .builtin_functions = e.functions
         };
 

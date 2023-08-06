@@ -6,7 +6,7 @@
 
 struct node;
 
-void disassembly(const uint8_t* bytes, uint32_t n_bytes);
+void disassembly(const uint8_t* bytes, uint32_t n_bytes, uint32_t start_address);
 void dump_ast(struct node* root, int indent);
 void print_program_error(const char* text, int32_t index);
 extern const char* rev_tokens[];

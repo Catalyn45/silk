@@ -65,7 +65,8 @@ static const char* rev_node[] = {
     "METHOD",
     "MEMBER",
     "CLASS",
-    "BLOCK"
+    "BLOCK",
+    "METHOD_FUN"
 };
 
 static const char* rev_instruction[] = {
@@ -96,11 +97,12 @@ static const char* rev_instruction[] = {
     "JMP",
     "CALL",
     "RET",
-    "PUSH_NUM"
+    "PUSH_NUM",
+    "GET_FIELD",
+    "SET_FIELD"
 };
 
-void disassembly(const uint8_t* bytes, uint32_t n_bytes) {
-    int32_t start_address = *(int32_t*)bytes;
+void disassembly(const uint8_t* bytes, uint32_t n_bytes, uint32_t start_address) {
     for (uint32_t i = start_address; i < n_bytes; ++i) {
         printf("%-3d : %s", i, rev_instruction[bytes[i]]);
 
@@ -130,7 +132,7 @@ void dump_ast(struct node* root, int indent) {
     if (!root)
         return;
 
-    if (root->type == NODE_STATEMENT || root->type == NODE_PARAMETER || root->type == NODE_ARGUMENT) {
+    if (root->type == NODE_STATEMENT || root->type == NODE_PARAMETER || root->type == NODE_ARGUMENT || root->type == NODE_MEMBER) {
         dump_ast(root->right, indent);
     }
 
@@ -157,7 +159,7 @@ void dump_ast(struct node* root, int indent) {
 
     dump_ast(root->left, indent+4);
 
-    if (root->type != NODE_STATEMENT && root->type != NODE_PARAMETER && root->type != NODE_ARGUMENT) {
+    if (root->type != NODE_STATEMENT && root->type != NODE_PARAMETER && root->type != NODE_ARGUMENT && root->type != NODE_MEMBER) {
         dump_ast(root->right, indent+4);
     }
 }

@@ -33,7 +33,9 @@ enum instructions {
     JMP        = 24,
     CALL       = 25,
     RET        = 26,
-    PUSH_NUM   = 27
+    PUSH_NUM   = 27,
+    GET_FIELD  = 28,
+    SET_FIELD  = 29
 };
 
 #define push(o) \
@@ -67,14 +69,10 @@ enum object_type {
     OBJ_STRING   = 1,
     OBJ_BOOL     = 2,
     OBJ_FUNCTION = 3,
-    OBJ_INSTANCE = 4
+    OBJ_INSTANCE = 4,
+    OBJ_CLASS    = 5
 };
 
-
-struct object_instance {
-    int32_t class_index;
-    uint32_t members[256];
-};
 
 enum function_type {
     USER     = 0,
@@ -82,35 +80,45 @@ enum function_type {
     METHOD   = 3
 };
 
-struct object_function {
-    int32_t type;
-    int32_t index;
-    int32_t n_parameters;
-};
 
 struct object {
     int32_t type;
+
     union {
         int32_t int_value;
         const char* str_value;
         bool bool_value;
         struct object_function* function_value;
         struct object_instance* instance_value;
+        struct object_class*    class_value;
     };
+};
+
+struct object_function {
+    int32_t type;
+    int32_t index;
+    int32_t n_parameters;
+    struct object context;
+};
+
+struct object_instance {
+    struct object_class* class_index;
+    struct object members[256];
 };
 
 struct pair {
     const char* name;
     int32_t index;
+    uint32_t n_parameters;
 };
 
 struct object_class {
     const char* name;
 
-    struct pair members[256];
+    const char* members[10];
     uint32_t n_members;
 
-    struct pair methods[256];
+    struct pair methods[10];
     uint32_t n_methods;
 };
 
@@ -147,6 +155,8 @@ struct vm {
 
     uint8_t* bytes;
     uint32_t n_bytes;
+
+    uint32_t start_address;
 
     uint32_t stack_size;
     uint32_t stack_base;

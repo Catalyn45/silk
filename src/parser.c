@@ -134,11 +134,12 @@ static int parse_postfix(struct parser* parser, struct node** root) {
             current_token = get_token();
 
             EXPECT_TOKEN(current_token->code, TOK_IDN);
+            advance();
 
-            struct node* identifier = node_new(NODE_VAR, current_token, NULL, NULL);
-            CHECK_NODE(identifier);
+            // struct node* identifier = node_new(NODE_VAR, current_token, NULL, NULL);
+            // CHECK_NODE(identifier);
 
-            struct node* member_access = node_new(NODE_MEMBER_ACCESS, NULL, left, identifier);
+            struct node* member_access = node_new(NODE_MEMBER_ACCESS, current_token, left, NULL);
             CHECK_NODE(member_access);
 
             member_access->flags |= (LVALUE | CALLABLE);
@@ -525,25 +526,6 @@ static int parse_declaration(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_member(struct parser* parser, struct node** root) {
-    const struct token* current_token = get_token();
-
-    EXPECT_TOKEN(current_token->code, TOK_VAR);
-    advance();
-
-    current_token = get_token();
-    EXPECT_TOKEN(current_token->code, TOK_IDN);
-    advance();
-
-    const struct token* identifier = current_token;
-
-    struct node* member = node_new(NODE_MEMBER, identifier, NULL, NULL);
-    CHECK_NODE(member);
-
-    *root = member;
-    return 0;
-}
-
 static int parse_class(struct parser* parser, struct node** root) {
     const struct token* current_token = get_token();
 
@@ -564,9 +546,15 @@ static int parse_class(struct parser* parser, struct node** root) {
 
     struct node* members = NULL;
     while (current_token->code == TOK_VAR) {
-        struct node* member;
-        CHECK(parse_member(parser, &member), "failed to parse member");
-        members = node_new(NODE_MEMBER, NULL, member, members);
+        advance();
+
+        current_token = get_token();
+        EXPECT_TOKEN(current_token->code, TOK_IDN);
+        advance();
+
+        const struct token* identifier = current_token;
+
+        members = node_new(NODE_MEMBER, identifier, NULL, members);
         CHECK_NODE(members);
 
         current_token = get_token();
@@ -576,6 +564,8 @@ static int parse_class(struct parser* parser, struct node** root) {
     while (current_token->code == TOK_FUN) {
         struct node* method;
         CHECK(parse_function(parser, &method), "failed to parse method");
+        method->type = NODE_METHOD_FUN;
+
         methods = node_new(NODE_METHOD, NULL, method, methods);
         CHECK_NODE(methods);
 
