@@ -602,8 +602,11 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 uint32_t new_stack_index = 2;
                 CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1, current_scope), "failed to evaluate function body");
 
-                // TODO: double ret in case of return
-                add_instruction(RET);
+                if (strcmp(ast->token->value, "constructor") == 0) {
+                    add_instruction(RET_INS);
+                } else {
+                    add_instruction(RET);
+                }
 
                 patch_placeholder(placeholder);
 
@@ -1199,6 +1202,19 @@ int execute(struct vm* vm) {
                     int32_t index = pop_number(vm);
 
                     vm->program_counter = index - 1;
+                }
+                break;
+            case RET_INS:
+                {
+                    vm->registers[0] = vm->stack[vm->stack_base - 1];
+
+                    vm->stack_size = vm->stack_base + 2;
+                    vm->stack_base = pop_number(vm);
+                    int32_t index = pop_number(vm);
+
+                    vm->program_counter = index - 1;
+
+                    --vm->stack_size;
                 }
                 break;
         }
