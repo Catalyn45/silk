@@ -57,6 +57,7 @@ struct var {
 
 struct vm;
 typedef struct object (*builtin_fun)(struct vm* vm);
+typedef struct object (*builtin_method)(struct object self, struct vm* vm);
 
 struct function {
     const char* name;
@@ -65,22 +66,44 @@ struct function {
     builtin_fun fun;
 };
 
+struct method {
+    const char* name;
+    builtin_method method;
+};
+
+struct class_ {
+    const char* name;
+    uint32_t index;
+
+    const char* members[20];
+    uint32_t n_members;
+
+    struct method methods[20];
+    uint32_t n_methods;
+};
+
 enum object_type {
     OBJ_NUMBER   = 0,
     OBJ_STRING   = 1,
     OBJ_BOOL     = 2,
     OBJ_FUNCTION = 3,
-    OBJ_INSTANCE = 4,
-    OBJ_CLASS    = 5
+    OBJ_METHOD   = 4,
+    OBJ_INSTANCE = 5,
+    OBJ_CLASS    = 6,
+    OBJ_USER     = 7
 };
 
-
-enum function_type {
+enum implementation_type {
     USER     = 0,
-    BUILT_IN = 1,
-    METHOD   = 3
+    BUILT_IN = 1
 };
 
+struct object_function {
+    int32_t type;
+
+    int32_t index;
+    int32_t n_parameters;
+};
 
 struct object {
     int32_t type;
@@ -90,20 +113,30 @@ struct object {
         const char* str_value;
         bool bool_value;
         struct object_function* function_value;
+        struct object_method* method_value;
         struct object_instance* instance_value;
         struct object_class*    class_value;
+        void* user_value;
     };
 };
 
-struct object_function {
+struct object_method {
     int32_t type;
+
     int32_t index;
     int32_t n_parameters;
+
     struct object context;
 };
 
 struct object_instance {
-    struct object_class* class_index;
+    int32_t type;
+
+    union {
+        struct object_class* class_index;
+        struct class_* buintin_index;
+    };
+
     struct object members[256];
 };
 
@@ -114,6 +147,9 @@ struct pair {
 };
 
 struct object_class {
+    int32_t type;
+    uint32_t index;
+
     const char* name;
 
     const char* members[10];
@@ -127,7 +163,7 @@ struct evaluator {
     struct function functions[1024];
     uint32_t n_functions;
 
-    struct object_class classes[256];
+    struct class_ classes[256];
     uint32_t n_classes;
 
     struct var locals[1024];
@@ -146,10 +182,12 @@ struct binary_data {
 };
 
 int add_builtin_functions(struct evaluator* e);
+int add_builtin_classes(struct evaluator* e);
 int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope);
 
 struct vm {
     struct function* builtin_functions;
+    struct class_* builtin_classes;
 
     uint32_t globals[2048];
     struct object stack[2048];

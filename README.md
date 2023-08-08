@@ -24,7 +24,7 @@ Just use `make sylk`. The project have no dependencies.
 - [x] logical operations
 - [x] function defenitions
 - [x] string support
-- [ ] classes
-- [ ] list data structure
+- [x] classes
+- [x] list data structure
 - [ ] standard library
 

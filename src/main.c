@@ -111,6 +111,7 @@ int main(int argc, char* argv[]) {
     uint32_t current_stack_index = 0;
 
     add_builtin_functions(&e);
+    add_builtin_classes(&e);
 
     if (evaluate(&e, ast, &d, &current_stack_index, 0, -1) != 0) {
         ERROR("failed to evaluate");
@@ -139,7 +140,8 @@ int main(int argc, char* argv[]) {
             .bytes = bytecode,
             .n_bytes = n_bytecodes,
             .start_address = start_address,
-            .builtin_functions = e.functions
+            .builtin_functions = e.functions,
+            .builtin_classes = e.classes
         };
 
         if (execute(&vm) != 0) {

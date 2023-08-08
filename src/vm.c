@@ -56,6 +56,16 @@ static struct function* get_function(const char* function_name, struct evaluator
     return NULL;
 }
 
+static struct class_* get_class(const char* class_name, struct evaluator* e) {
+    for (uint i = 0; i < e->n_functions; ++i) {
+        if (strcmp(e->classes[i].name, class_name) == 0) {
+            return &e->classes[i];
+        }
+    }
+
+    return NULL;
+}
+
 static int32_t add_constant(struct binary_data* data, const struct object* o, int32_t* out_address) {
     uint32_t constant_address = data->n_constants_bytes;
 
@@ -175,6 +185,89 @@ int add_builtin_functions(struct evaluator* e) {
     return 0;
 };
 
+struct list_context {
+    struct object container[20];
+    uint32_t n_elements;
+};
+
+static struct object list_constructor(struct object self, struct vm* vm) {
+    (void)vm;
+
+    struct list_context* context = malloc(sizeof(*context));
+    *context = (struct list_context) {};
+
+    self.instance_value->members[0] = (struct object) {
+        .type = OBJ_USER,
+        .user_value = context
+    };
+
+    return (struct object){};
+}
+
+static struct object list_add(struct object self, struct vm* vm) {
+    struct list_context* context = self.instance_value->members[0].user_value;
+    context->container[context->n_elements++] = *peek(0);
+
+    return (struct object){};
+}
+
+static struct object list_pop(struct object self, struct vm* vm) {
+    (void)vm;
+    struct list_context* context = self.instance_value->members[0].user_value;
+
+    return context->container[--context->n_elements];
+}
+
+static struct object list_set(struct object self, struct vm* vm) {
+    struct list_context* context = self.instance_value->members[0].user_value;
+
+    uint32_t index = peek(0)->int_value;
+    context->container[index] = *peek(1);
+
+    return (struct object){};
+}
+
+static struct object list_get(struct object self, struct vm* vm) {
+    struct list_context* context = self.instance_value->members[0].user_value;
+
+    uint32_t index = peek(0)->int_value;
+    return context->container[index];
+}
+
+int add_builtin_classes(struct evaluator* e) {
+    struct class_ list = {
+        .name = "list"
+    };
+
+    list.methods[list.n_methods++] = (struct method){
+        .name = "constructor",
+        .method = list_constructor
+    };
+
+    list.methods[list.n_methods++] = (struct method){
+        .name = "add",
+        .method = list_add
+    };
+
+    list.methods[list.n_methods++] = (struct method){
+        .name = "pop",
+        .method = list_pop
+    };
+
+    list.methods[list.n_methods++] = (struct method){
+        .name = "__set",
+        .method = list_set
+    };
+
+    list.methods[list.n_methods++] = (struct method){
+        .name = "__get",
+        .method = list_get
+    };
+
+    e->classes[e->n_classes++] = list;
+
+    return 0;
+}
 
 static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope) {
     switch (ast->type) {
@@ -313,27 +406,45 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
 
                 const char* name = ast->token->value;
                 struct function* f = get_function(name, e);
-                if (f == NULL) {
-                    ERROR("identifier %s does not exist", name);
-                    return 1;
+                if (f) {
+                    struct object o = {
+                        .type = OBJ_FUNCTION,
+                        .function_value = &(struct object_function) {
+                            .type = BUILT_IN,
+                            .n_parameters = f->n_parameters,
+                            .index = f->index
+                        }
+                    };
+
+                    int32_t out_address;
+                    add_constant(data, &o, &out_address);
+
+                    add_instruction(PUSH);
+                    add_number(out_address);
+
+                    return 0;
                 }
 
-                struct object o = {
-                    .type = OBJ_FUNCTION,
-                    .function_value = &(struct object_function) {
-                        .type = BUILT_IN,
-                        .n_parameters = f->n_parameters,
-                        .index = f->index
-                    }
-                };
+                struct class_* c = get_class(name, e);
+                if (c) {
+                    struct object o = {
+                        .type = OBJ_CLASS,
+                        .class_value = &(struct object_class) {
+                            .type = BUILT_IN,
+                            .index = c->index
+                        }
+                    };
 
-                int32_t out_address;
-                add_constant(data, &o, &out_address);
+                    int32_t out_address;
+                    add_constant(data, &o, &out_address);
 
-                add_instruction(PUSH);
-                add_number(out_address);
+                    add_instruction(PUSH);
+                    add_number(out_address);
 
-                return 0;
+                    return 0;
+                }
+
+                return 1;
             }
         case NODE_BINARY_OP:
             CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate binary operation");
@@ -697,6 +808,10 @@ static void push_bool(struct vm* vm, bool value) {
 
 static void push_func(struct vm* vm, struct object_function* func) {
     vm->stack[vm->stack_size++] = (struct object){.type = OBJ_FUNCTION, .function_value = func};
+}
+
+static void push_method(struct vm* vm, struct object_method* method) {
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_METHOD, .method_value = method};
 }
 
 static void push_class(struct vm* vm, struct object_class* cls) {
@@ -1093,14 +1208,26 @@ int execute(struct vm* vm) {
                         if (value == NULL)
                             return 1;
 
-                        *value = (struct object_instance) {
-                            .class_index = cls
-                        };
+                        if (cls->type == USER) {
+                            *value = (struct object_instance) {
+                                .type = USER,
+                                .class_index = cls
+                            };
+                        } else {
+                            *value = (struct object_instance) {
+                                .type = BUILT_IN,
+                                .buintin_index = &vm->builtin_classes[cls->index]
+                            };
+                        }
 
                         struct object o = (struct object) {
                             .type = OBJ_INSTANCE,
                             .instance_value = value
                         };
+
+                        if (cls->type == BUILT_IN) {
+                            vm->builtin_classes[cls->index].methods[0].method(o, vm);
+                        }
 
                         uint32_t i;
                         for (i = 0; i < cls->n_methods; ++i) {
@@ -1125,12 +1252,25 @@ int execute(struct vm* vm) {
                         break;
                     }
 
-                    if (o.type == OBJ_FUNCTION) {
-                        if (o.function_value->type == USER || o.function_value->type == METHOD) {
-                            if (o.function_value->type == METHOD) {
-                                push(o.function_value->context);
-                            }
+                    if (o.type == OBJ_METHOD) {
+                        if (o.method_value->type == USER) {
+                            push(o.method_value->context);
 
+                            uint32_t old_base = vm->stack_base;
+                            vm->stack_base = vm->stack_size;
+
+                            push_number(vm, vm->program_counter + 1);
+                            push_number(vm, old_base);
+
+                            vm->program_counter = vm->start_address + o.method_value->index - 1;
+                        } else if (o.method_value->type == BUILT_IN) {
+                            vm->registers[RETURN_REGISTER] = vm->builtin_classes[o.method_value->context.instance_value->class_index->index].methods[o.method_value->index].method(o.method_value->context, vm);
+                        }
+                        break;
+                    }
+
+                    if (o.type == OBJ_FUNCTION) {
+                        if (o.function_value->type == USER) {
                             uint32_t old_base = vm->stack_base;
                             vm->stack_base = vm->stack_size;
 
@@ -1150,13 +1290,28 @@ int execute(struct vm* vm) {
                     const char* field_name;
                     CHECK(pop_string_check(vm, &field_name), "field name is not a string");
 
-                    struct object* instance = pop();
-                    struct object_class* cls = instance->instance_value->class_index;
+                    struct object instance = *pop();
 
+                    if (instance.instance_value->type == BUILT_IN) {
+                        uint32_t i;
+                        for (i = 0; i < instance.instance_value->buintin_index->n_methods; ++i) {
+                            if (strcmp(instance.instance_value->buintin_index->methods[i].name, field_name) == 0) {
+                                push_method(vm, &(struct object_method){.type = BUILT_IN, .index = i, .n_parameters = 0, .context = instance});
+                                break;
+                            }
+                        }
+
+                        if (i == instance.instance_value->buintin_index->n_methods)
+                            return 1;
+
+                        break;
+                    }
+
+                    struct object_class* cls = instance.instance_value->class_index;
                     uint32_t i = 0;
                     for (i = 0; i < cls->n_members; ++i) {
                         if (strcmp(cls->members[i], field_name) == 0) {
-                            push(instance->instance_value->members[i]);
+                            push(instance.instance_value->members[i]);
                             break;
                         }
                     }
@@ -1164,7 +1319,7 @@ int execute(struct vm* vm) {
                     if (i == cls->n_members) {
                         for (i = 0; i < cls->n_methods; ++i) {
                             if (strcmp(cls->methods[i].name, field_name) == 0) {
-                                push_func(vm, &(struct object_function){.type = METHOD, .index = cls->methods[i].index, .n_parameters = cls->methods[i].n_parameters, .context = *instance});
+                                push_method(vm, &(struct object_method){.type = USER, .index = cls->methods[i].index, .n_parameters = cls->methods[i].n_parameters, .context = instance});
                                 break;
                             }
                         }
