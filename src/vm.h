@@ -86,11 +86,11 @@ enum object_type {
     OBJ_NUMBER   = 0,
     OBJ_STRING   = 1,
     OBJ_BOOL     = 2,
-    OBJ_FUNCTION = 3,
-    OBJ_METHOD   = 4,
-    OBJ_INSTANCE = 5,
-    OBJ_CLASS    = 6,
-    OBJ_USER     = 7
+    OBJ_USER     = 3,
+    OBJ_FUNCTION = 4,
+    OBJ_METHOD   = 5,
+    OBJ_INSTANCE = 6,
+    OBJ_CLASS    = 7
 };
 
 enum implementation_type {
@@ -109,14 +109,14 @@ struct object {
     int32_t type;
 
     union {
-        int32_t int_value;
+        int32_t     int_value;
         const char* str_value;
-        bool bool_value;
+        bool        bool_value;
+        void*       user_value;
         struct object_function* function_value;
-        struct object_method* method_value;
+        struct object_method*   method_value;
         struct object_instance* instance_value;
         struct object_class*    class_value;
-        void* user_value;
     };
 };
 
@@ -134,7 +134,7 @@ struct object_instance {
 
     union {
         struct object_class* class_index;
-        struct class_* buintin_index;
+        struct class_*       buintin_index;
     };
 
     struct object members[256];
@@ -200,6 +200,7 @@ struct vm {
     uint32_t stack_size;
     uint32_t stack_base;
     uint32_t program_counter;
+
     struct object registers[10];
 
     bool halt;

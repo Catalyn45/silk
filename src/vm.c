@@ -236,32 +236,31 @@ static struct object list_get(struct object self, struct vm* vm) {
 
 int add_builtin_classes(struct evaluator* e) {
     struct class_ list = {
-        .name = "list"
-    };
-
-    list.methods[list.n_methods++] = (struct method){
-        .name = "constructor",
-        .method = list_constructor
-    };
-
-    list.methods[list.n_methods++] = (struct method){
-        .name = "add",
-        .method = list_add
-    };
-
-    list.methods[list.n_methods++] = (struct method){
-        .name = "pop",
-        .method = list_pop
-    };
-
-    list.methods[list.n_methods++] = (struct method){
-        .name = "__set",
-        .method = list_set
-    };
-
-    list.methods[list.n_methods++] = (struct method){
-        .name = "__get",
-        .method = list_get
+        .name = "list",
+        .index = 0,
+        .n_methods = 5,
+        .methods = {
+            {
+                .name = "constructor",
+                .method = list_constructor
+            },
+            {
+                .name = "add",
+                .method = list_add
+            },
+            {
+                .name = "pop",
+                .method = list_pop
+            },
+            {
+                .name = "__set",
+                .method = list_set
+            },
+            {
+                .name = "__get",
+                .method = list_get
+            }
+        }
     };
 
     e->classes[e->n_classes++] = list;
@@ -899,6 +898,23 @@ bool pop_bool_check(struct vm* vm, bool* out_bool) {
     return 0;
 }
 
+static void call(struct vm* vm, int32_t index) {
+    uint32_t old_base = vm->stack_base;
+    vm->stack_base = vm->stack_size;
+
+    push_number(vm, vm->program_counter + 1);
+    push_number(vm, old_base);
+
+    vm->program_counter = vm->start_address + index - 1;
+}
+
+static void return_(struct vm* vm) {
+    vm->stack_size = vm->stack_base + 2;
+    vm->stack_base = pop_number(vm);
+    int32_t index = pop_number(vm);
+
+    vm->program_counter = index - 1;
+}
 
 static int add_strings(struct vm* vm, struct object* value1, struct object* value2) {
     char* new_string = malloc(500);
@@ -1227,57 +1243,42 @@ int execute(struct vm* vm) {
 
                         if (cls->type == BUILT_IN) {
                             vm->builtin_classes[cls->index].methods[0].method(o, vm);
-                        }
-
-                        uint32_t i;
-                        for (i = 0; i < cls->n_methods; ++i) {
-                            // TODO: this don't need to have return
-                            if (strcmp(cls->methods[i].name, "constructor") == 0) {
-                                push(o);
-
-                                uint32_t old_base = vm->stack_base;
-                                vm->stack_base = vm->stack_size;
-
-                                push_number(vm, vm->program_counter + 1);
-                                push_number(vm, old_base);
-
-                                vm->program_counter = vm->start_address + cls->methods[i].index - 1;
-                                break;
+                        } else {
+                            uint32_t i;
+                            for (i = 0; i < cls->n_methods; ++i) {
+                                // TODO: this don't need to have return
+                                if (strcmp(cls->methods[i].name, "constructor") == 0) {
+                                    push(o);
+                                    call(vm, cls->methods[i].index);
+                                    break;
+                                }
                             }
+
+                            if (i == cls->n_methods)
+                                return 1;
                         }
 
-                        if (i == cls->n_methods)
-                            vm->registers[RETURN_REGISTER] = o;
-
+                        vm->registers[RETURN_REGISTER] = o;
                         break;
                     }
 
                     if (o.type == OBJ_METHOD) {
                         if (o.method_value->type == USER) {
                             push(o.method_value->context);
-
-                            uint32_t old_base = vm->stack_base;
-                            vm->stack_base = vm->stack_size;
-
-                            push_number(vm, vm->program_counter + 1);
-                            push_number(vm, old_base);
-
-                            vm->program_counter = vm->start_address + o.method_value->index - 1;
+                            call(vm, o.method_value->index);
                         } else if (o.method_value->type == BUILT_IN) {
-                            vm->registers[RETURN_REGISTER] = vm->builtin_classes[o.method_value->context.instance_value->class_index->index].methods[o.method_value->index].method(o.method_value->context, vm);
+                            struct object* instance = &o.method_value->context;
+                            struct class_* cls = instance->instance_value->buintin_index;
+                            struct method* method = &cls->methods[o.method_value->index];
+
+                            vm->registers[RETURN_REGISTER] = method->method(*instance, vm);
                         }
                         break;
                     }
 
                     if (o.type == OBJ_FUNCTION) {
                         if (o.function_value->type == USER) {
-                            uint32_t old_base = vm->stack_base;
-                            vm->stack_base = vm->stack_size;
-
-                            push_number(vm, vm->program_counter + 1);
-                            push_number(vm, old_base);
-
-                            vm->program_counter = vm->start_address + o.function_value->index - 1;
+                            call(vm, o.function_value->index);
                         } else if (o.function_value->type == BUILT_IN) {
                             vm->registers[RETURN_REGISTER] = vm->builtin_functions[o.function_value->index].fun(vm);
                         }
@@ -1293,15 +1294,26 @@ int execute(struct vm* vm) {
                     struct object instance = *pop();
 
                     if (instance.instance_value->type == BUILT_IN) {
+                        struct class_* cls = instance.instance_value->buintin_index;
+
                         uint32_t i;
-                        for (i = 0; i < instance.instance_value->buintin_index->n_methods; ++i) {
-                            if (strcmp(instance.instance_value->buintin_index->methods[i].name, field_name) == 0) {
-                                push_method(vm, &(struct object_method){.type = BUILT_IN, .index = i, .n_parameters = 0, .context = instance});
+                        for (i = 0; i < cls->n_members; ++i) {
+                            if (strcmp(cls->members[i], field_name) == 0) {
+                                push(instance.instance_value->members[i]);
                                 break;
                             }
                         }
 
-                        if (i == instance.instance_value->buintin_index->n_methods)
+                        if (i == cls->n_members) {
+                            for (i = 0; i < cls->n_methods; ++i) {
+                                if (strcmp(cls->methods[i].name, field_name) == 0) {
+                                    push_method(vm, &(struct object_method){.type = BUILT_IN, .index = i, .n_parameters = 0, .context = instance});
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (i == cls->n_methods)
                             return 1;
 
                         break;
@@ -1336,8 +1348,25 @@ int execute(struct vm* vm) {
                     CHECK(pop_string_check(vm, &field_name), "field name is not a string");
 
                     struct object* instance = pop();
-                    struct object_class* cls = instance->instance_value->class_index;
 
+                    if (instance->instance_value->type == BUILT_IN) {
+                        struct class_* cls = instance->instance_value->buintin_index;
+
+                        uint32_t i;
+                        for (i = 0; i < cls->n_members; ++i) {
+                            if (strcmp(cls->members[i], field_name) == 0) {
+                                instance->instance_value->members[i] = *pop();
+                                break;
+                            }
+                        }
+
+                        if (i == cls->n_members)
+                            return 1;
+
+                        break;
+                    }
+
+                    struct object_class* cls = instance->instance_value->class_index;
                     uint32_t i;
                     for (i = 0; i < cls->n_members; ++i) {
                         if (strcmp(cls->members[i], field_name) == 0) {
@@ -1352,23 +1381,13 @@ int execute(struct vm* vm) {
                 break;
             case RET:
                 {
-                    vm->stack_size = vm->stack_base + 2;
-                    vm->stack_base = pop_number(vm);
-                    int32_t index = pop_number(vm);
-
-                    vm->program_counter = index - 1;
+                    return_(vm);
                 }
                 break;
             case RET_INS:
                 {
-                    vm->registers[0] = vm->stack[vm->stack_base - 1];
-
-                    vm->stack_size = vm->stack_base + 2;
-                    vm->stack_base = pop_number(vm);
-                    int32_t index = pop_number(vm);
-
-                    vm->program_counter = index - 1;
-
+                    vm->registers[RETURN_REGISTER] = vm->stack[vm->stack_base - 1];
+                    return_(vm);
                     --vm->stack_size;
                 }
                 break;
