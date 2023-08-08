@@ -1,4 +1,5 @@
 #include "vm.h"
+
 #include "lexer.h"
 #include "parser.h"
 #include "stdlib.h"
@@ -301,6 +302,27 @@ static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_
                 add_number(out_address);
 
                 add_instruction(SET_FIELD);
+
+                return 0;
+            }
+        case NODE_INDEX:
+            {
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate left member of member index expression");
+
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate left member of member index");
+
+                int32_t out_address;
+                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = "__set"}, &out_address);
+                add_instruction(PUSH)
+                add_number(out_address);
+
+                add_instruction(GET_FIELD);
+                add_instruction(CALL);
+                add_instruction(POP);
+                add_instruction(POP);
+
+                add_instruction(DUP_REG);
+                add_number(RETURN_REGISTER);
 
                 return 0;
             }
@@ -757,6 +779,25 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 add_number(out_address);
 
                 add_instruction(GET_FIELD);
+
+                return 0;
+            }
+        case NODE_INDEX:
+            {
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope), "failed to evaluate left member of member index expression");
+
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope), "failed to evaluate left member of member index");
+
+                int32_t out_address;
+                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = "__get"}, &out_address);
+                add_instruction(PUSH)
+                add_number(out_address);
+
+                add_instruction(GET_FIELD);
+                add_instruction(CALL);
+                add_instruction(POP);
+                add_instruction(DUP_REG);
+                add_number(RETURN_REGISTER);
 
                 return 0;
             }
