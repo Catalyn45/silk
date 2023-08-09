@@ -153,6 +153,12 @@ static int tokenize_identifier(uint32_t* current_index, const char* text, uint32
 #define is_end() \
     (current_index + 1 >= text_size)
 
+void go_next_line(uint32_t* current_index, const char* text, uint32_t text_size) {
+    while (*current_index < text_size && text[*current_index] != '\n') {
+        ++(*current_index);
+    }
+}
+
 int tokenize(const char* text, uint32_t text_size, struct token** out_tokens, uint32_t* out_n_tokens) {
     struct token* tokens = malloc(CHUNK_SIZE * sizeof(*tokens));
     if (tokens == NULL) {
@@ -167,6 +173,8 @@ int tokenize(const char* text, uint32_t text_size, struct token** out_tokens, ui
     while (current_index < text_size) {
         char current_character = text[current_index];
         switch(current_character) {
+            case '#':
+                go_next_line(&current_index, text, text_size);
             case '\n':
                 line += 1;
             case ' ':

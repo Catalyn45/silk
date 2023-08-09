@@ -7,6 +7,7 @@ syn match SylkFunction "\<[a-zA-Z_][a-zA-Z0-9_]*\>" contained
 
 syn region SylkString start='"' end='"'
 syn region SylkString start="'" end="'"
+syn region SylkComment start="#" end="$"
 syn match SylkNumber '\d\+' display
 syn match SylkNumber '[-+]\d\+' display
 
@@ -42,3 +43,5 @@ hi def link SylkRepeats Repeat
 hi def link SylkBrackets Delimiter
 hi def link SylkParants Delimiter
 hi def link SylkSquare Delimiter
+
+hi def link SylkComment Comment
