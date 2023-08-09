@@ -57,7 +57,7 @@ static struct function* get_function(const char* function_name, struct evaluator
 }
 
 static struct class_* get_class(const char* class_name, struct evaluator* e) {
-    for (uint i = 0; i < e->n_functions; ++i) {
+    for (uint i = 0; i < e->n_classes; ++i) {
         if (strcmp(e->classes[i].name, class_name) == 0) {
             return &e->classes[i];
         }
