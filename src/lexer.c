@@ -1,9 +1,10 @@
-#include "lexer.h"
-#include "utils.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "lexer.h"
+#include "utils.h"
 
 #define CHUNK_SIZE 512
 
@@ -89,7 +90,7 @@ static bool is_iden(char character) {
 
 
 static bool check_keyword(const char* text, int* out_token_code) {
-    struct {
+    static const struct {
         const char* name;
         int token;
     } keywords[] = {

@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "utils.h"
 #include "vm.h"
+#include "instructions.h"
 
 const char* rev_tokens[] = {
     "int",       // TOK_INT, // integer (20)

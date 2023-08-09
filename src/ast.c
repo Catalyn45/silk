@@ -1,5 +1,6 @@
-#include "ast.h"
 #include <stdlib.h>
+
+#include "ast.h"
 
 struct node* node_new(int type, const struct token* token, struct node* left, struct node* right) {
     struct node* n = malloc(sizeof(*n));

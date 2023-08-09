@@ -1,12 +1,18 @@
+
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "ast.h"
 #include "lexer.h"
 #include "utils.h"
 #include "string.h"
 #include "parser.h"
+
+#include "stdlib/functions.h"
+#include "stdlib/classes.h"
+
 #include "vm.h"
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #define print_help() \
 { \

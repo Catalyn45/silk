@@ -2,7 +2,7 @@
 #define _UTILS_H_
 
 #include <stdint.h>
-#include <stdbool.h> 
+#include <stdbool.h>
 
 struct node;
 
