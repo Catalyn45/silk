@@ -9,7 +9,7 @@ syn region SylkString start='"' end='"'
 syn region SylkString start="'" end="'"
 syn region SylkComment start="#" end="$"
 syn match SylkNumber '\d\+' display
-syn match SylkNumber '[-+]\d\+' display
+syn match SylkNumber '[-]\d\+' display
 
 syn keyword SylkDeclarations var class nextgroup=SylkIdentifier skipwhite
 syn keyword SylkDeclarations def nextgroup=SylkFunction skipwhite
@@ -19,9 +19,14 @@ syn keyword SylkRepeats while
 syn keyword SylkSpecial self
 syn keyword SylkKeywords return
 
+syn keyword SylkBools true false
+
 syn match SylkParants /[()]/ contains=SylkParants
 syn match SylkBrackets /[{}]/ contains=SylkBrackets
-syn match SylkSquare /[][[]/ contains=SylkSquare
+syn match SylkSquare /[[]]/ contains=SylkSquare
+
+syn match SylkPunctuations /[,]/
+syn match SylkPunctuations /[.]/
 
 syn region SylkBlock start="{" end="}" fold transparent
 
@@ -43,5 +48,8 @@ hi def link SylkRepeats Repeat
 hi def link SylkBrackets Delimiter
 hi def link SylkParants Delimiter
 hi def link SylkSquare Delimiter
+hi def link SylkPunctuations Delimiter
+
+hi def link SylkBools Boolean
 
 hi def link SylkComment Comment
