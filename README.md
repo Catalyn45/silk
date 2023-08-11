@@ -26,6 +26,6 @@ Just use `make sylk`. The project have no dependencies.
 - [x] string support
 - [x] classes
 - [x] list data structure
-- [ ] garbage collector
+- [x] garbage collector
 - [ ] standard library
 

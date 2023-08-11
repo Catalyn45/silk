@@ -10,9 +10,7 @@ struct list_context {
 };
 
 static struct object list_constructor(struct object self, struct vm* vm) {
-    (void)vm;
-
-    struct list_context* context = malloc(sizeof(*context));
+    struct list_context* context = gc_alloc(vm, sizeof(*context));
     *context = (struct list_context) {};
 
     self.instance_value->members[0] = (struct object) {

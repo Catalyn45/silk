@@ -10,14 +10,8 @@
 #include "stdlib.h"
 #include "utils.h"
 #include "instructions.h"
+#include "gc.h"
 #include "objects.h"
-
-#define read_value(value_type) \
-    (*((value_type*)(vm->bytes + vm->program_counter + 1)))
-
-#define read_value_increment(value_type) \
-    (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
-
 
 static void push_number(struct vm* vm, int32_t number) {
     vm->stack[vm->stack_size++] = (struct object){.type = OBJ_NUMBER, .int_value = number};
@@ -89,24 +83,23 @@ static int pop_number_check(struct vm* vm, int32_t* out_number) {
     return 0;
 }
 
-/*
-// unused for the moment
+
 static const char* pop_string(struct vm* vm) {
-    struct object* obj = pop();
-    return obj->str_value;
-}
-*/
-
-static int pop_string_check(struct vm* vm, const char** out_string) {
     struct object obj = pop();
-    if (obj.type != OBJ_STRING) {
-        ERROR("string required, got %d", obj.type);
-        return 1;
-    }
-
-    *out_string = obj.str_value;
-    return 0;
+    return obj.str_value;
 }
+
+
+// static int pop_string_check(struct vm* vm, const char** out_string) {
+//     struct object obj = pop();
+//     if (obj.type != OBJ_STRING) {
+//         ERROR("string required, got %d", obj.type);
+//         return 1;
+//     }
+//
+//     *out_string = obj.str_value;
+//     return 0;
+// }
 
 bool pop_bool(struct vm* vm) {
     struct object obj = pop();
@@ -168,8 +161,17 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
     return 0;
 }
 
+
+#define read_value(value_type) \
+    (*((value_type*)(vm->bytes + vm->program_counter + 1)))
+
+#define read_value_increment(value_type) \
+    (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
+
+
 int execute(struct vm* vm) {
     vm->program_counter = vm->start_address;
+    vm->gc.treshold = 2;
 
     while (!vm->halt && vm->program_counter < vm->n_bytes) {
         switch (vm->bytes[vm->program_counter]) {
@@ -446,7 +448,7 @@ int execute(struct vm* vm) {
                     if (o.type == OBJ_CLASS) {
                         struct object_class* cls = o.class_value;
 
-                        struct object_instance* value = malloc(sizeof(*value));
+                        struct object_instance* value = gc_alloc(vm, sizeof(*value));
                         if (value == NULL)
                             return 1;
 
@@ -513,8 +515,7 @@ int execute(struct vm* vm) {
 
             case GET_FIELD:
                 {
-                    const char* field_name;
-                    CHECK(pop_string_check(vm, &field_name), "field name is not a string");
+                    const char* field_name = pop_string(vm);
 
                     struct object instance = pop();
 
@@ -569,8 +570,7 @@ int execute(struct vm* vm) {
 
             case SET_FIELD:
                 {
-                    const char* field_name;
-                    CHECK(pop_string_check(vm, &field_name), "field name is not a string");
+                    const char* field_name = pop_string(vm);
 
                     struct object instance = pop();
 

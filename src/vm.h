@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "compiler.h"
+#include "gc.h"
 #include "objects.h"
 
 #define push(o) \
@@ -32,6 +33,8 @@ struct vm {
     uint32_t program_counter;
 
     struct object registers[10];
+
+    struct gc gc;
 
     bool halt;
 };
