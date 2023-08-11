@@ -10,10 +10,10 @@
     vm->stack[vm->stack_size++] = o
 
 #define pop() \
-    (&vm->stack[--vm->stack_size])
+    (vm->stack[--vm->stack_size])
 
 #define peek(n) \
-    (&vm->stack[vm->stack_size - 1 - n])
+    (vm->stack[vm->stack_size - 1 - n])
 
 struct vm {
     struct function* builtin_functions;

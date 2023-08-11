@@ -7,21 +7,21 @@
 
 
 static struct object print_object(struct vm* vm) {
-    struct object* o = peek(0);
+    struct object o = peek(0);
 
-    if (o->type == OBJ_NUMBER) {
-        printf("%d\n", o->int_value);
-    } else if (o->type == OBJ_STRING) {
-        printf("%s\n", o->str_value);
+    if (o.type == OBJ_NUMBER) {
+        printf("%d\n", o.int_value);
+    } else if (o.type == OBJ_STRING) {
+        printf("%s\n", o.str_value);
     }
 
     return (struct object){};
 }
 
 static struct object input_number(struct vm* vm) {
-    struct object* o = (struct object*)peek(0);
+    struct object o = peek(0);
 
-    const char* input_text = o->str_value;
+    const char* input_text = o.str_value;
     printf("%s", input_text);
 
     int32_t number;
@@ -33,9 +33,9 @@ static struct object input_number(struct vm* vm) {
 };
 
 static struct object input_string(struct vm* vm) {
-    struct object* o = (struct object*)peek(0);
+    struct object o = peek(0);
 
-    const char* input_text = o->str_value;
+    const char* input_text = o.str_value;
     printf("%s", input_text);
 
     char* string = malloc(200);

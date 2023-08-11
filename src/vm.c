@@ -74,18 +74,18 @@ static void push_constant(struct vm* vm, int32_t address) {
 }
 
 static int32_t pop_number(struct vm* vm) {
-    struct object* obj = pop();
-    return obj->int_value;
+    struct object obj = pop();
+    return obj.int_value;
 }
 
 static int pop_number_check(struct vm* vm, int32_t* out_number) {
-    struct object* obj = pop();
-    if (obj->type != OBJ_NUMBER) {
-        ERROR("number required, got %d", obj->type);
+    struct object obj = pop();
+    if (obj.type != OBJ_NUMBER) {
+        ERROR("number required, got %d", obj.type);
         return 1;
     }
 
-    *out_number = obj->int_value;
+    *out_number = obj.int_value;
     return 0;
 }
 
@@ -98,29 +98,29 @@ static const char* pop_string(struct vm* vm) {
 */
 
 static int pop_string_check(struct vm* vm, const char** out_string) {
-    struct object* obj = pop();
-    if (obj->type != OBJ_STRING) {
-        ERROR("string required, got %d", obj->type);
+    struct object obj = pop();
+    if (obj.type != OBJ_STRING) {
+        ERROR("string required, got %d", obj.type);
         return 1;
     }
 
-    *out_string = obj->str_value;
+    *out_string = obj.str_value;
     return 0;
 }
 
 bool pop_bool(struct vm* vm) {
-    struct object* obj = pop();
-    return obj->bool_value;
+    struct object obj = pop();
+    return obj.bool_value;
 }
 
 bool pop_bool_check(struct vm* vm, bool* out_bool) {
-    struct object* obj = pop();
-    if (obj->type != OBJ_BOOL) {
-        ERROR("bool required, got %d", obj->type);
+    struct object obj = pop();
+    if (obj.type != OBJ_BOOL) {
+        ERROR("bool required, got %d", obj.type);
         return 1;
     }
 
-    *out_bool = obj->bool_value;
+    *out_bool = obj.bool_value;
     return 0;
 }
 
@@ -205,23 +205,23 @@ int execute(struct vm* vm) {
 
             case ADD:
                 {
-                    struct object* value1 = pop();
-                    struct object* value2 = pop();
+                    struct object value1 = pop();
+                    struct object value2 = pop();
 
-                    if (value1->type == OBJ_STRING || value2->type == OBJ_STRING) {
-                        CHECK(add_strings(vm, value1, value2), "failed to add objects");
+                    if (value1.type == OBJ_STRING || value2.type == OBJ_STRING) {
+                        CHECK(add_strings(vm, &value1, &value2), "failed to add objects");
                         break;
                     }
 
-                    if (value1->type == OBJ_NUMBER && value2->type == OBJ_NUMBER) {
-                        int32_t number1 = value1->int_value;
-                        int32_t number2 = value2->int_value;
+                    if (value1.type == OBJ_NUMBER && value2.type == OBJ_NUMBER) {
+                        int32_t number1 = value1.int_value;
+                        int32_t number2 = value2.int_value;
 
                         push_number(vm, number1 + number2);
                         break;
                     }
 
-                    ERROR("add operation for object types: %d and %d not defined", value1->type, value2->type);
+                    ERROR("add operation for object types: %d and %d not defined", value1.type, value2.type);
                     return 1;
 
                 }
@@ -274,16 +274,16 @@ int execute(struct vm* vm) {
 
             case DEQ:
                 {
-                    struct object* exp1 = pop();
-                    struct object* exp2 = pop();
+                    struct object exp1 = pop();
+                    struct object exp2 = pop();
 
-                    if (exp1->type == OBJ_NUMBER && exp2->type == OBJ_NUMBER) {
-                        push_bool(vm, exp1->int_value == exp2->int_value);
+                    if (exp1.type == OBJ_NUMBER && exp2.type == OBJ_NUMBER) {
+                        push_bool(vm, exp1.int_value == exp2.int_value);
                         break;
                     }
 
-                    if (exp1->type == OBJ_BOOL && exp2->type == OBJ_BOOL) {
-                        push_bool(vm, exp1->bool_value == exp2->bool_value);
+                    if (exp1.type == OBJ_BOOL && exp2.type == OBJ_BOOL) {
+                        push_bool(vm, exp1.bool_value == exp2.bool_value);
                         break;
                     }
 
@@ -293,16 +293,16 @@ int execute(struct vm* vm) {
 
             case NEQ:
                 {
-                    struct object* exp1 = pop();
-                    struct object* exp2 = pop();
+                    struct object exp1 = pop();
+                    struct object exp2 = pop();
 
-                    if (exp1->type == OBJ_NUMBER && exp2->type == OBJ_NUMBER) {
-                        push_bool(vm, exp1->int_value != exp2->int_value);
+                    if (exp1.type == OBJ_NUMBER && exp2.type == OBJ_NUMBER) {
+                        push_bool(vm, exp1.int_value != exp2.int_value);
                         break;
                     }
 
-                    if (exp1->type == OBJ_BOOL && exp2->type == OBJ_BOOL) {
-                        push_bool(vm, exp1->bool_value != exp2->bool_value);
+                    if (exp1.type == OBJ_BOOL && exp2.type == OBJ_BOOL) {
+                        push_bool(vm, exp1.bool_value != exp2.bool_value);
                         break;
                     }
 
@@ -404,19 +404,19 @@ int execute(struct vm* vm) {
             case CHANGE:
                 {
                     int32_t index = pop_number(vm);
-                    vm->stack[index] = *pop();
+                    vm->stack[index] = pop();
                 }
                 break;
             case CHANGE_LOC:
                 {
                     int32_t index = pop_number(vm);
-                    vm->stack[vm->stack_base + index] = *pop();
+                    vm->stack[vm->stack_base + index] = pop();
                 }
                 break;
             case CHANGE_REG:
                 {
                     int32_t index = read_value_increment(int32_t);
-                    vm->registers[index] = *pop();
+                    vm->registers[index] = pop();
                 }
                 break;
             case JMP_NOT:
@@ -441,7 +441,7 @@ int execute(struct vm* vm) {
 
             case CALL:
                 {
-                    struct object o = *pop();
+                    struct object o = pop();
 
                     if (o.type == OBJ_CLASS) {
                         struct object_class* cls = o.class_value;
@@ -472,7 +472,6 @@ int execute(struct vm* vm) {
                         } else {
                             uint32_t i;
                             for (i = 0; i < cls->n_methods; ++i) {
-                                // TODO: this don't need to have return
                                 if (strcmp(cls->methods[i].name, "constructor") == 0) {
                                     push(o);
                                     call(vm, cls->methods[i].index);
@@ -517,7 +516,7 @@ int execute(struct vm* vm) {
                     const char* field_name;
                     CHECK(pop_string_check(vm, &field_name), "field name is not a string");
 
-                    struct object instance = *pop();
+                    struct object instance = pop();
 
                     if (instance.instance_value->type == BUILT_IN) {
                         struct class_* cls = instance.instance_value->buintin_index;
@@ -573,15 +572,15 @@ int execute(struct vm* vm) {
                     const char* field_name;
                     CHECK(pop_string_check(vm, &field_name), "field name is not a string");
 
-                    struct object* instance = pop();
+                    struct object instance = pop();
 
-                    if (instance->instance_value->type == BUILT_IN) {
-                        struct class_* cls = instance->instance_value->buintin_index;
+                    if (instance.instance_value->type == BUILT_IN) {
+                        struct class_* cls = instance.instance_value->buintin_index;
 
                         uint32_t i;
                         for (i = 0; i < cls->n_members; ++i) {
                             if (strcmp(cls->members[i], field_name) == 0) {
-                                instance->instance_value->members[i] = *pop();
+                                instance.instance_value->members[i] = pop();
                                 break;
                             }
                         }
@@ -592,11 +591,11 @@ int execute(struct vm* vm) {
                         break;
                     }
 
-                    struct object_class* cls = instance->instance_value->class_index;
+                    struct object_class* cls = instance.instance_value->class_index;
                     uint32_t i;
                     for (i = 0; i < cls->n_members; ++i) {
                         if (strcmp(cls->members[i], field_name) == 0) {
-                            instance->instance_value->members[i] = *pop();
+                            instance.instance_value->members[i] = pop();
                             break;
                         }
                     }

@@ -25,7 +25,7 @@ static struct object list_constructor(struct object self, struct vm* vm) {
 
 static struct object list_add(struct object self, struct vm* vm) {
     struct list_context* context = self.instance_value->members[0].user_value;
-    context->container[context->n_elements++] = *peek(0);
+    context->container[context->n_elements++] = peek(0);
 
     return (struct object){};
 }
@@ -40,8 +40,8 @@ static struct object list_pop(struct object self, struct vm* vm) {
 static struct object list_set(struct object self, struct vm* vm) {
     struct list_context* context = self.instance_value->members[0].user_value;
 
-    uint32_t index = peek(0)->int_value;
-    context->container[index] = *peek(1);
+    uint32_t index = peek(0).int_value;
+    context->container[index] = peek(1);
 
     return (struct object){};
 }
@@ -49,7 +49,7 @@ static struct object list_set(struct object self, struct vm* vm) {
 static struct object list_get(struct object self, struct vm* vm) {
     struct list_context* context = self.instance_value->members[0].user_value;
 
-    uint32_t index = peek(0)->int_value;
+    uint32_t index = peek(0).int_value;
     return context->container[index];
 }
 
