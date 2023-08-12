@@ -31,6 +31,13 @@ static struct object list_pop(struct object self, struct vm* vm) {
     return context->container[--context->n_elements];
 }
 
+static struct object list_length(struct object self, struct vm* vm) {
+    (void)vm;
+    struct list_context* context = self.instance_value->context;
+
+    return (struct object) {.type = OBJ_NUMBER, .int_value = context->n_elements};
+}
+
 static struct object list_set(struct object self, struct vm* vm) {
     struct list_context* context = self.instance_value->context;
 
@@ -52,11 +59,8 @@ int add_builtin_classes(struct evaluator* e) {
         .name = "list",
         .index = 0,
         .n_methods = 5,
+        .constructor = list_constructor,
         .methods = {
-            {
-                .name = "constructor",
-                .method = list_constructor
-            },
             {
                 .name = "add",
                 .method = list_add
@@ -64,6 +68,10 @@ int add_builtin_classes(struct evaluator* e) {
             {
                 .name = "pop",
                 .method = list_pop
+            },
+            {
+                .name = "length",
+                .method = list_length
             },
             {
                 .name = "__set",

@@ -33,6 +33,8 @@ struct class_ {
     const char* name;
     uint32_t index;
 
+    builtin_method constructor;
+
     const char* members[20];
     uint32_t n_members;
 

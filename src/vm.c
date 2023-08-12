@@ -89,7 +89,6 @@ static const char* pop_string(struct vm* vm) {
     return obj.str_value;
 }
 
-
 // static int pop_string_check(struct vm* vm, const char** out_string) {
 //     struct object obj = pop();
 //     if (obj.type != OBJ_STRING) {
@@ -123,7 +122,6 @@ static void call(struct vm* vm, int32_t index, uint32_t n_args) {
 }
 
 static void ret(struct vm* vm) {
-
     struct object return_val = pop();
 
     vm->stack_size = vm->stack_base;
@@ -144,6 +142,7 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
         strcpy(new_string, value1->str_value);
         n_new_string += strlen(value1->str_value);
     } else {
+        ERROR("can't add objects of type %d and %d", value1->type, value2->type);
         return 1;
     }
 
@@ -153,6 +152,7 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
         strcpy(new_string + n_new_string, value2->str_value);
         n_new_string += strlen(value2->str_value);
     } else {
+        ERROR("can't add objects of type %d and %d", value1->type, value2->type);
         return 1;
     }
 
@@ -167,6 +167,14 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
 #define read_value_increment(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
 
+#define pop_args(n_args) \
+{ \
+    for (int32_t i = 0; i < n_args; ++i) { \
+        (void)pop(); \
+    } \
+    (void)pop(); \
+    (void)pop(); \
+}
 
 int execute(struct vm* vm) {
     vm->program_counter = vm->start_address;
@@ -202,7 +210,6 @@ int execute(struct vm* vm) {
 
             case POP:
                 --vm->stack_size;
-                gc_clean(vm);
                 break;
 
             case ADD:
@@ -449,22 +456,28 @@ int execute(struct vm* vm) {
                     int32_t n_args = read_value_increment(int32_t);
 
                     if (o.type == OBJ_CLASS) {
-                        struct object_class* cls = o.class_value;
+                        gc_clean(vm);
 
+                        struct object_class* cls = o.class_value;
                         struct object_instance* value = gc_alloc(vm, sizeof(*value));
-                        if (value == NULL)
+                        if (value == NULL) {
+                            MEMORY_ERROR();
                             return 1;
+                        }
 
                         if (cls->type == USER) {
                             *value = (struct object_instance) {
                                 .type = USER,
                                 .class_index = cls
                             };
-                        } else {
+                        } else if (cls->type == BUILT_IN) {
                             *value = (struct object_instance) {
                                 .type = BUILT_IN,
                                 .buintin_index = &vm->builtin_classes[cls->index]
                             };
+                        } else {
+                            ERROR("class type: %d unknown", cls->type);
+                            return 1;
                         }
 
                         struct object o = (struct object) {
@@ -473,38 +486,27 @@ int execute(struct vm* vm) {
                         };
 
                         if (cls->type == BUILT_IN) {
-                            vm->builtin_classes[cls->index].methods[0].method(o, vm);
-
-                            for (int32_t i = 0; i < n_args; ++i) {
-                                (void)pop();
+                            if (vm->builtin_classes[cls->index].constructor) {
+                                vm->builtin_classes[cls->index].constructor(o, vm);
+                                pop_args(n_args);
+                                break;
                             }
-
-                            // pop base
-                            (void)pop();
-
-                            //pop ret addr
-                            (void)pop();
-
-                            push(o);
-
+                        } else if (cls->type == USER) {
+                            if(cls->constructor >= 0) {
+                                push(o);
+                                call(vm, cls->constructor, n_args + 1);
+                                break;
+                            }
                         } else {
-                            uint32_t i;
-                            for (i = 0; i < cls->n_methods; ++i) {
-                                if (strcmp(cls->methods[i].name, "constructor") == 0) {
-                                    push(o);
-                                    call(vm, cls->methods[i].index, n_args + 1);
-                                    break;
-                                }
-                            }
-
-                            if (i == cls->n_methods)
-                                return 1;
+                            ERROR("class type: %d unknown", cls->type);
+                            return 1;
                         }
 
-                        break;
-                    }
+                        pop_args(0)
+                        push(o);
 
-                    if (o.type == OBJ_METHOD) {
+                        break;
+                    } else if (o.type == OBJ_METHOD) {
                         if (o.method_value->type == USER) {
                             push(o.method_value->context);
                             call(vm, o.method_value->index, n_args + 1);
@@ -514,40 +516,27 @@ int execute(struct vm* vm) {
                             struct method* method = &cls->methods[o.method_value->index];
 
                             struct object result = method->method(*instance, vm);
-
-                            for (int32_t i = 0; i < n_args; ++i) {
-                                (void)pop();
-                            }
-
-                            // pop base
-                            (void)pop();
-
-                            //pop ret addr
-                            (void)pop();
+                            pop_args(n_args);
 
                             push(result);
+                        } else {
+                            ERROR("method of type: %d unknown", o.method_value->type);
+                            return 1;
                         }
-                        break;
-                    }
 
-                    if (o.type == OBJ_FUNCTION) {
+                        break;
+                    } else if (o.type == OBJ_FUNCTION) {
                         if (o.function_value->type == USER) {
                             call(vm, o.function_value->index, n_args);
                         } else if (o.function_value->type == BUILT_IN) {
                             struct object result = vm->builtin_functions[o.function_value->index].fun(vm);
-                            // pop args
-                            for (int32_t i = 0; i < n_args; ++i) {
-                                (void)pop();
-                            }
-
-                            // pop base
-                            (void)pop();
-
-                            //pop ret addr
-                            (void)pop();
+                            pop_args(n_args);
 
                             push(result);
                         }
+                    } else {
+                        ERROR("can't call object of type: %d", o.type);
+                        return 1;
                     }
                 }
                 break;
@@ -569,23 +558,28 @@ int execute(struct vm* vm) {
                             }
                         }
 
-                        if (i == cls->n_members) {
-                            for (i = 0; i < cls->n_methods; ++i) {
-                                if (strcmp(cls->methods[i].name, field_name) == 0) {
-                                    push_method(vm, &(struct object_method){.type = BUILT_IN, .index = i, .n_parameters = 0, .context = instance});
-                                    break;
-                                }
+                        if (i < cls->n_members) {
+                            break;
+                        }
+
+                        for (i = 0; i < cls->n_methods; ++i) {
+                            if (strcmp(cls->methods[i].name, field_name) == 0) {
+                                push_method(vm, &(struct object_method){.type = BUILT_IN, .index = i, .n_parameters = 0, .context = instance});
+                                break;
                             }
                         }
 
-                        if (i == cls->n_methods)
-                            return 1;
+                        if (i < cls->n_methods) {
+                            break;
+                        }
 
-                        break;
+                        ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
+                        return 1;
                     }
 
                     struct object_class* cls = instance.instance_value->class_index;
-                    uint32_t i = 0;
+
+                    uint32_t i;
                     for (i = 0; i < cls->n_members; ++i) {
                         if (strcmp(cls->members[i], field_name) == 0) {
                             push(instance.instance_value->members[i]);
@@ -593,17 +587,23 @@ int execute(struct vm* vm) {
                         }
                     }
 
-                    if (i == cls->n_members) {
-                        for (i = 0; i < cls->n_methods; ++i) {
-                            if (strcmp(cls->methods[i].name, field_name) == 0) {
-                                push_method(vm, &(struct object_method){.type = USER, .index = cls->methods[i].index, .n_parameters = cls->methods[i].n_parameters, .context = instance});
-                                break;
-                            }
+                    if (i < cls->n_members) {
+                        break;
+                    }
+
+                    for (i = 0; i < cls->n_methods; ++i) {
+                        if (strcmp(cls->methods[i].name, field_name) == 0) {
+                            push_method(vm, &(struct object_method){.type = USER, .index = cls->methods[i].index, .n_parameters = cls->methods[i].n_parameters, .context = instance});
+                            break;
                         }
                     }
 
-                    if (i == cls->n_methods)
-                        return 1;
+                    if (i < cls->n_methods) {
+                        break;
+                    }
+
+                    ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
+                    return 1;
                 }
                 break;
 
@@ -624,8 +624,10 @@ int execute(struct vm* vm) {
                             }
                         }
 
-                        if (i == cls->n_members)
+                        if (i == cls->n_members) {
+                            ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
                             return 1;
+                        }
 
                         break;
                     }
@@ -639,8 +641,10 @@ int execute(struct vm* vm) {
                         }
                     }
 
-                    if (i == cls->n_members)
+                    if (i == cls->n_members) {
+                        ERROR("property: %s does not exist in class: %s", field_name, cls->name);
                         return 1;
+                    }
                 }
                 break;
             case RET:

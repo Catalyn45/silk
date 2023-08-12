@@ -75,6 +75,8 @@ struct object_class {
 
     const char* name;
 
+    int32_t constructor;
+
     const char* members[10];
     uint32_t n_members;
 

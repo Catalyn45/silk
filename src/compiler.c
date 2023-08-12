@@ -463,7 +463,8 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 struct object cls = {
                     .type = OBJ_CLASS,
                     .class_value = &(struct object_class) {
-                        .name = class_name
+                        .name = class_name,
+                        .constructor = -1
                     }
                 };
 
@@ -509,10 +510,8 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 uint32_t placeholder = create_placeholder();
 
                 struct object_class* current_class = ctx;
-                current_class->methods[current_class->n_methods++] = (struct pair){
-                    .name = ast->token->value,
-                    .index = data->n_program_bytes
-                };
+
+                int32_t method_address = data->n_program_bytes;
 
                 uint32_t new_stack_index = 0;
 
@@ -530,10 +529,17 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1, current_scope, ctx), "failed to evaluate function body");
 
                 if (strcmp(ast->token->value, "constructor") == 0) {
+                    current_class->constructor = method_address;
+
                     add_instruction(DUP_LOC);
                     int32_t self_pos = n_parameters - 1;
                     add_number(self_pos);
                 } else {
+                    current_class->methods[current_class->n_methods++] = (struct pair){
+                        .name = ast->token->value,
+                        .index = method_address
+                    };
+
                     add_instruction(PUSH_FALSE);
                 }
 
