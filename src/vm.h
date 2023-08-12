@@ -32,8 +32,6 @@ struct vm {
     uint32_t stack_base;
     uint32_t program_counter;
 
-    struct object registers[10];
-
     struct gc gc;
 
     bool halt;

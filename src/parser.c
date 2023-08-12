@@ -489,8 +489,11 @@ static int parse_return(struct parser* parser, struct node** root ) {
     EXPECT_TOKEN(current_token->code, TOK_RET);
     advance();
 
-    struct node* expression;
-    CHECK(parse_expression(parser, &expression), "failed to parse expression");
+    // empty return only if last thing  from block
+    struct node* expression = NULL;
+    if (get_token()->code != TOK_RBR) {
+        CHECK(parse_expression(parser, &expression), "failed to parse expression");
+    }
 
     struct node* return_node = node_new(NODE_RETURN, NULL, expression, NULL);
     CHECK_NODE(return_node);
@@ -564,9 +567,9 @@ static int parse_class(struct parser* parser, struct node** root) {
     while (current_token->code == TOK_FUN) {
         struct node* method;
         CHECK(parse_function(parser, &method), "failed to parse method");
-        method->type = NODE_METHOD_FUN;
+        method->type = NODE_METHOD;
 
-        methods = node_new(NODE_METHOD, NULL, method, methods);
+        methods = node_new(NODE_METHODS, NULL, method, methods);
         CHECK_NODE(methods);
 
         current_token = get_token();

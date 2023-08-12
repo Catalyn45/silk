@@ -12,17 +12,13 @@ struct list_context {
 static struct object list_constructor(struct object self, struct vm* vm) {
     struct list_context* context = gc_alloc(vm, sizeof(*context));
     *context = (struct list_context) {};
-
-    self.instance_value->members[0] = (struct object) {
-        .type = OBJ_USER,
-        .user_value = context
-    };
+    self.instance_value->context = context;
 
     return (struct object){};
 }
 
 static struct object list_add(struct object self, struct vm* vm) {
-    struct list_context* context = self.instance_value->members[0].user_value;
+    struct list_context* context = self.instance_value->context;
     context->container[context->n_elements++] = peek(0);
 
     return (struct object){};
@@ -30,13 +26,13 @@ static struct object list_add(struct object self, struct vm* vm) {
 
 static struct object list_pop(struct object self, struct vm* vm) {
     (void)vm;
-    struct list_context* context = self.instance_value->members[0].user_value;
+    struct list_context* context = self.instance_value->context;
 
     return context->container[--context->n_elements];
 }
 
 static struct object list_set(struct object self, struct vm* vm) {
-    struct list_context* context = self.instance_value->members[0].user_value;
+    struct list_context* context = self.instance_value->context;
 
     uint32_t index = peek(0).int_value;
     context->container[index] = peek(1);
@@ -45,7 +41,7 @@ static struct object list_set(struct object self, struct vm* vm) {
 }
 
 static struct object list_get(struct object self, struct vm* vm) {
-    struct list_context* context = self.instance_value->members[0].user_value;
+    struct list_context* context = self.instance_value->context;
 
     uint32_t index = peek(0).int_value;
     return context->container[index];

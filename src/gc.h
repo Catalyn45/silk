@@ -18,6 +18,6 @@ struct gc {
 struct vm;
 
 void* gc_alloc(struct vm* vm, size_t size);
-void* gc_clean(struct vm* vm);
+void gc_clean(struct vm* vm);
 
 #endif

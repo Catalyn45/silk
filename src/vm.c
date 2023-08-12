@@ -117,21 +117,20 @@ bool pop_bool_check(struct vm* vm, bool* out_bool) {
     return 0;
 }
 
-static void call(struct vm* vm, int32_t index) {
-    uint32_t old_base = vm->stack_base;
-    vm->stack_base = vm->stack_size;
-
-    push_number(vm, vm->program_counter + 1);
-    push_number(vm, old_base);
-
+static void call(struct vm* vm, int32_t index, uint32_t n_args) {
+    vm->stack_base = vm->stack_size - n_args;
     vm->program_counter = vm->start_address + index - 1;
 }
 
 static void ret(struct vm* vm) {
-    vm->stack_size = vm->stack_base + 2;
-    vm->stack_base = pop_number(vm);
-    int32_t index = pop_number(vm);
 
+    struct object return_val = pop();
+
+    vm->stack_size = vm->stack_base;
+    int32_t index = pop_number(vm);
+    vm->stack_base = pop_number(vm);
+
+    push(return_val);
     vm->program_counter = index - 1;
 }
 
@@ -171,7 +170,7 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
 
 int execute(struct vm* vm) {
     vm->program_counter = vm->start_address;
-    vm->gc.treshold = 2;
+    vm->gc.treshold = 3;
 
     while (!vm->halt && vm->program_counter < vm->n_bytes) {
         switch (vm->bytes[vm->program_counter]) {
@@ -203,6 +202,7 @@ int execute(struct vm* vm) {
 
             case POP:
                 --vm->stack_size;
+                gc_clean(vm);
                 break;
 
             case ADD:
@@ -397,28 +397,16 @@ int execute(struct vm* vm) {
                     push(vm->stack[vm->stack_base + index]);
                 }
                 break;
-            case DUP_REG:
-                {
-                    int32_t index = read_value_increment(int32_t);
-                    push(vm->registers[index]);
-                }
-                break;
             case CHANGE:
                 {
-                    int32_t index = pop_number(vm);
+                    int32_t index = read_value_increment(int32_t);
                     vm->stack[index] = pop();
                 }
                 break;
             case CHANGE_LOC:
                 {
-                    int32_t index = pop_number(vm);
-                    vm->stack[vm->stack_base + index] = pop();
-                }
-                break;
-            case CHANGE_REG:
-                {
                     int32_t index = read_value_increment(int32_t);
-                    vm->registers[index] = pop();
+                    vm->stack[vm->stack_base + index] = pop();
                 }
                 break;
             case JMP_NOT:
@@ -441,9 +429,24 @@ int execute(struct vm* vm) {
                 }
                 break;
 
+            case PUSH_BASE:
+                {
+                    uint32_t old_base = vm->stack_base;
+                    push_number(vm, old_base);
+                }
+                break;
+
+            case PUSH_ADDR:
+                {
+                    int32_t addr = read_value_increment(int32_t);
+                    push_number(vm, vm->start_address + addr);
+                }
+                break;
+
             case CALL:
                 {
                     struct object o = pop();
+                    int32_t n_args = read_value_increment(int32_t);
 
                     if (o.type == OBJ_CLASS) {
                         struct object_class* cls = o.class_value;
@@ -471,12 +474,25 @@ int execute(struct vm* vm) {
 
                         if (cls->type == BUILT_IN) {
                             vm->builtin_classes[cls->index].methods[0].method(o, vm);
+
+                            for (int32_t i = 0; i < n_args; ++i) {
+                                (void)pop();
+                            }
+
+                            // pop base
+                            (void)pop();
+
+                            //pop ret addr
+                            (void)pop();
+
+                            push(o);
+
                         } else {
                             uint32_t i;
                             for (i = 0; i < cls->n_methods; ++i) {
                                 if (strcmp(cls->methods[i].name, "constructor") == 0) {
                                     push(o);
-                                    call(vm, cls->methods[i].index);
+                                    call(vm, cls->methods[i].index, n_args + 1);
                                     break;
                                 }
                             }
@@ -485,29 +501,52 @@ int execute(struct vm* vm) {
                                 return 1;
                         }
 
-                        vm->registers[RETURN_REGISTER] = o;
                         break;
                     }
 
                     if (o.type == OBJ_METHOD) {
                         if (o.method_value->type == USER) {
                             push(o.method_value->context);
-                            call(vm, o.method_value->index);
+                            call(vm, o.method_value->index, n_args + 1);
                         } else if (o.method_value->type == BUILT_IN) {
                             struct object* instance = &o.method_value->context;
                             struct class_* cls = instance->instance_value->buintin_index;
                             struct method* method = &cls->methods[o.method_value->index];
 
-                            vm->registers[RETURN_REGISTER] = method->method(*instance, vm);
+                            struct object result = method->method(*instance, vm);
+
+                            for (int32_t i = 0; i < n_args; ++i) {
+                                (void)pop();
+                            }
+
+                            // pop base
+                            (void)pop();
+
+                            //pop ret addr
+                            (void)pop();
+
+                            push(result);
                         }
                         break;
                     }
 
                     if (o.type == OBJ_FUNCTION) {
                         if (o.function_value->type == USER) {
-                            call(vm, o.function_value->index);
+                            call(vm, o.function_value->index, n_args);
                         } else if (o.function_value->type == BUILT_IN) {
-                            vm->registers[RETURN_REGISTER] = vm->builtin_functions[o.function_value->index].fun(vm);
+                            struct object result = vm->builtin_functions[o.function_value->index].fun(vm);
+                            // pop args
+                            for (int32_t i = 0; i < n_args; ++i) {
+                                (void)pop();
+                            }
+
+                            // pop base
+                            (void)pop();
+
+                            //pop ret addr
+                            (void)pop();
+
+                            push(result);
                         }
                     }
                 }
@@ -607,13 +646,6 @@ int execute(struct vm* vm) {
             case RET:
                 {
                     ret(vm);
-                }
-                break;
-            case RET_INS:
-                {
-                    vm->registers[RETURN_REGISTER] = vm->stack[vm->stack_base - 1];
-                    ret(vm);
-                    --vm->stack_size;
                 }
                 break;
         }

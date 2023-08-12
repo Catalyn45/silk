@@ -62,6 +62,6 @@ struct binary_data {
     uint32_t n_program_bytes;
 };
 
-int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope);
+int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope, void* ctx);
 
 #endif

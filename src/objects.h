@@ -60,6 +60,7 @@ struct object_instance {
     };
 
     struct object members[256];
+    void* context;
 };
 
 struct pair {

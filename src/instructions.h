@@ -21,9 +21,9 @@ enum instructions {
     OR         = 16,
     DUP        = 17,
     DUP_LOC    = 18,
-    DUP_REG    = 19,
+    PUSH_ADDR  = 19,
     CHANGE     = 20,
-    CHANGE_REG = 21,
+    PUSH_BASE  = 21,
     CHANGE_LOC = 22,
     JMP_NOT    = 23,
     JMP        = 24,
@@ -31,10 +31,7 @@ enum instructions {
     RET        = 26,
     PUSH_NUM   = 27,
     GET_FIELD  = 28,
-    SET_FIELD  = 29,
-    RET_INS    = 30
+    SET_FIELD  = 29
 };
-
-#define RETURN_REGISTER 0
 
 #endif

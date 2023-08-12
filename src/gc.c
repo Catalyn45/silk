@@ -1,5 +1,6 @@
 #include "gc.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include "objects.h"
 #include "vm.h"
@@ -10,9 +11,6 @@ void* gc_alloc(struct vm* vm, size_t size) {
         return NULL;
 
     struct gc* gc = &vm->gc;
-    if (gc->n_items >= gc->treshold) {
-        gc_clean(vm);
-    }
 
     gc->pool[gc->n_items++] = (struct gc_item){
         .marked = false,
@@ -40,6 +38,11 @@ static void mark_item(struct gc* gc, struct object* obj) {
             if (item->marked)
                 break;
 
+            if (instance->context) {
+                struct gc_item* context_item = get_item(gc, instance->context);
+                context_item->marked = true;
+            }
+
             item->marked = true;
             if (instance->type == USER) {
                 for (uint32_t i = 0; i < instance->class_index->n_members; ++i) {
@@ -55,15 +58,20 @@ static void mark_item(struct gc* gc, struct object* obj) {
 
         case OBJ_USER:
         {
-            struct gc_item* item = get_item(gc, obj->user_value);
-            item->marked = true;
+            if (obj->user_value) {
+                struct gc_item* item = get_item(gc, obj->user_value);
+                item->marked = true;
+            }
         }
         break;
     }
 }
 
-void* gc_clean(struct vm* vm) {
+void gc_clean(struct vm* vm) {
     struct gc* gc = &vm->gc;
+    if (gc->n_items < gc->treshold)
+        return;
+
     for (uint32_t i = 0; i < vm->stack_size; ++i) {
         mark_item(gc, &vm->stack[i]);
     }
@@ -72,11 +80,15 @@ void* gc_clean(struct vm* vm) {
 
     while (i < gc->n_items) {
         while (i < gc->n_items && !gc->pool[i].marked) {
+            printf("deleting memory\n");
             free(gc->pool[i].memory);
             gc->pool[i] = gc->pool[--gc->n_items];
         }
+
+        if (i < gc->n_items) {
+            gc->pool[i].marked = false;
+        }
+
         ++i;
     }
-
-    return NULL;
 }

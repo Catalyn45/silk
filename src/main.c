@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
     add_builtin_functions(&e);
     add_builtin_classes(&e);
 
-    if (evaluate(&e, ast, &d, &current_stack_index, 0, -1) != 0) {
+    if (evaluate(&e, ast, &d, &current_stack_index, 0, -1, NULL) != 0) {
         ERROR("failed to evaluate");
         return 1;
     }

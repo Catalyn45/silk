@@ -90,9 +90,9 @@ static const char* rev_instruction[] = {
     "OR",
     "DUP",
     "DUP_LOC",
-    "DUP_REG",
+    "PUSH_ADDR",
     "CHANGE",
-    "CHANGE_REG",
+    "PUSH_BASE",
     "CHANGE_LOC",
     "JMP_NOT",
     "JMP",
@@ -100,7 +100,7 @@ static const char* rev_instruction[] = {
     "RET",
     "PUSH_NUM",
     "GET_FIELD",
-    "SET_FIELD"
+    "SET_FIELD",
 };
 
 void disassembly(const uint8_t* bytes, uint32_t n_bytes, uint32_t start_address) {
@@ -112,14 +112,16 @@ void disassembly(const uint8_t* bytes, uint32_t n_bytes, uint32_t start_address)
             case PUSH_NUM:
             case DUP:
             case DUP_LOC:
-            case DUP_REG:
-            case CHANGE_REG:
+            case CALL:
+            case CHANGE:
+            case CHANGE_LOC:
                 printf(" %d", *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;
 
             case JMP_NOT:
             case JMP:
+            case PUSH_ADDR:
                 printf(" %d", start_address + *((uint32_t*)&bytes[i + 1]));
                 i += sizeof(uint32_t);
                 break;
