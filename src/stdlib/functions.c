@@ -10,7 +10,7 @@ static struct object print_object(struct vm* vm) {
     struct object o = peek(0);
 
     if (o.type == OBJ_NUMBER) {
-        printf("%d\n", o.int_value);
+        printf("%d\n", o.num_value);
     } else if (o.type == OBJ_STRING) {
         printf("%s\n", o.str_value);
     }
@@ -29,7 +29,7 @@ static struct object input_number(struct vm* vm) {
 
     puts("");
 
-    return (struct object){.type = OBJ_NUMBER, .int_value = number};
+    return (struct object){.type = OBJ_NUMBER, .num_value = number};
 };
 
 static struct object input_string(struct vm* vm) {
@@ -38,7 +38,7 @@ static struct object input_string(struct vm* vm) {
     const char* input_text = o.str_value;
     printf("%s", input_text);
 
-    char* string = malloc(200);
+    char* string = gc_alloc(vm, 200);
     scanf("%s", string);
 
     puts("");

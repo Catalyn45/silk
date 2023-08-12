@@ -73,7 +73,7 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
     data->n_constants_bytes += sizeof(int32_t);
 
     if (o->type == OBJ_NUMBER) {
-        *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->int_value;
+        *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->num_value;
         data->n_constants_bytes += sizeof(int32_t);
 
         *out_address = constant_address;
@@ -211,7 +211,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 add_instruction(PUSH);
 
                 int32_t constant_address;
-                CHECK(add_constant(data, &(struct object){.type = OBJ_NUMBER, .int_value = *(int32_t*)ast->token->value}, &constant_address), "failed to add constant");
+                CHECK(add_constant(data, &(struct object){.type = OBJ_NUMBER, .num_value = *(int32_t*)ast->token->value}, &constant_address), "failed to add constant");
 
                 add_number(constant_address);
 

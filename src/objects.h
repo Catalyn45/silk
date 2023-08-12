@@ -31,7 +31,7 @@ struct object {
     int32_t type;
 
     union {
-        int32_t     int_value;
+        int32_t     num_value;
         const char* str_value;
         bool        bool_value;
         void*       user_value;

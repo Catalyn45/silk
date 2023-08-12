@@ -14,7 +14,7 @@
 #include "objects.h"
 
 static void push_number(struct vm* vm, int32_t number) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_NUMBER, .int_value = number};
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_NUMBER, .num_value = number};
 }
 
 static void push_string(struct vm* vm, char* string) {
@@ -69,7 +69,7 @@ static void push_constant(struct vm* vm, int32_t address) {
 
 static int32_t pop_number(struct vm* vm) {
     struct object obj = pop();
-    return obj.int_value;
+    return obj.num_value;
 }
 
 static int pop_number_check(struct vm* vm, int32_t* out_number) {
@@ -79,7 +79,7 @@ static int pop_number_check(struct vm* vm, int32_t* out_number) {
         return 1;
     }
 
-    *out_number = obj.int_value;
+    *out_number = obj.num_value;
     return 0;
 }
 
@@ -133,11 +133,11 @@ static void ret(struct vm* vm) {
 }
 
 static int add_strings(struct vm* vm, struct object* value1, struct object* value2) {
-    char* new_string = malloc(500);
+    char* new_string = gc_alloc(vm, 500);
     uint32_t n_new_string = 0;
 
     if (value1->type == OBJ_NUMBER) {
-        n_new_string += sprintf(new_string, "%d", value1->int_value);
+        n_new_string += sprintf(new_string, "%d", value1->num_value);
     } else if (value1->type == OBJ_STRING) {
         strcpy(new_string, value1->str_value);
         n_new_string += strlen(value1->str_value);
@@ -147,7 +147,7 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
     }
 
     if (value2->type == OBJ_NUMBER) {
-        n_new_string += sprintf(new_string + n_new_string, "%d", value2->int_value);
+        n_new_string += sprintf(new_string + n_new_string, "%d", value2->num_value);
     } else if (value2->type == OBJ_STRING) {
         strcpy(new_string + n_new_string, value2->str_value);
         n_new_string += strlen(value2->str_value);
@@ -178,7 +178,9 @@ static int add_strings(struct vm* vm, struct object* value1, struct object* valu
 
 int execute(struct vm* vm) {
     vm->program_counter = vm->start_address;
-    vm->gc.treshold = 3;
+
+    // run gc at this number of allocated objects
+    vm->gc.treshold = 20;
 
     while (!vm->halt && vm->program_counter < vm->n_bytes) {
         switch (vm->bytes[vm->program_counter]) {
@@ -223,8 +225,8 @@ int execute(struct vm* vm) {
                     }
 
                     if (value1.type == OBJ_NUMBER && value2.type == OBJ_NUMBER) {
-                        int32_t number1 = value1.int_value;
-                        int32_t number2 = value2.int_value;
+                        int32_t number1 = value1.num_value;
+                        int32_t number2 = value2.num_value;
 
                         push_number(vm, number1 + number2);
                         break;
@@ -287,7 +289,7 @@ int execute(struct vm* vm) {
                     struct object exp2 = pop();
 
                     if (exp1.type == OBJ_NUMBER && exp2.type == OBJ_NUMBER) {
-                        push_bool(vm, exp1.int_value == exp2.int_value);
+                        push_bool(vm, exp1.num_value == exp2.num_value);
                         break;
                     }
 
@@ -306,7 +308,7 @@ int execute(struct vm* vm) {
                     struct object exp2 = pop();
 
                     if (exp1.type == OBJ_NUMBER && exp2.type == OBJ_NUMBER) {
-                        push_bool(vm, exp1.int_value != exp2.int_value);
+                        push_bool(vm, exp1.num_value != exp2.num_value);
                         break;
                     }
 
@@ -489,8 +491,10 @@ int execute(struct vm* vm) {
                             if (vm->builtin_classes[cls->index].constructor) {
                                 vm->builtin_classes[cls->index].constructor(o, vm);
                                 pop_args(n_args);
-                                break;
                             }
+                            push(o);
+                            break;
+
                         } else if (cls->type == USER) {
                             if(cls->constructor >= 0) {
                                 push(o);

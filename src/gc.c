@@ -32,38 +32,52 @@ static struct gc_item* get_item(struct gc* gc, void* item) {
 static void mark_item(struct gc* gc, struct object* obj) {
     switch (obj->type) {
         case OBJ_INSTANCE:
-        {
-            struct object_instance* instance = obj->instance_value;
-            struct gc_item* item = get_item(gc, instance);
-            if (item->marked)
-                break;
+            {
+                struct object_instance* instance = obj->instance_value;
+                struct gc_item* item = get_item(gc, instance);
+                if (item->marked)
+                    break;
 
-            if (instance->context) {
-                struct gc_item* context_item = get_item(gc, instance->context);
-                context_item->marked = true;
-            }
+                if (instance->context) {
+                    struct gc_item* context_item = get_item(gc, instance->context);
+                    context_item->marked = true;
+                }
 
-            item->marked = true;
-            if (instance->type == USER) {
-                for (uint32_t i = 0; i < instance->class_index->n_members; ++i) {
-                    mark_item(gc, &instance->members[i]);
-                }
-            } else if (instance->type == BUILT_IN) {
-                for (uint32_t i = 0; i < instance->buintin_index->n_members; ++i) {
-                    mark_item(gc, &instance->members[i]);
+                item->marked = true;
+                if (instance->type == USER) {
+                    for (uint32_t i = 0; i < instance->class_index->n_members; ++i) {
+                        mark_item(gc, &instance->members[i]);
+                    }
+                } else if (instance->type == BUILT_IN) {
+                    for (uint32_t i = 0; i < instance->buintin_index->n_members; ++i) {
+                        mark_item(gc, &instance->members[i]);
+                    }
                 }
             }
-        }
-        break;
+            break;
 
         case OBJ_USER:
-        {
-            if (obj->user_value) {
+            {
+                if (obj->user_value) {
+                    struct gc_item* item = get_item(gc, obj->user_value);
+
+                    item->marked = true;
+                }
+            }
+            break;
+
+        case OBJ_STRING:
+            {
                 struct gc_item* item = get_item(gc, obj->user_value);
+                if (!item) {
+                    // strings can be constants so they are not
+                    // dinamically allocated
+                    break;
+                }
+
                 item->marked = true;
             }
-        }
-        break;
+            break;
     }
 }
 
