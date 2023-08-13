@@ -75,15 +75,11 @@ static int32_t pop_number(struct vm* vm) {
 
 static int pop_number_check(struct vm* vm, int32_t* out_number) {
     struct object obj = pop();
-    if (obj.type != OBJ_NUMBER) {
-        ERROR("number required, got %d", obj.type);
-        return 1;
-    }
+    EXPECT_OBJECT(obj.type, OBJ_NUMBER);
 
     *out_number = obj.num_value;
     return 0;
 }
-
 
 static const char* pop_string(struct vm* vm) {
     struct object obj = pop();
@@ -92,10 +88,7 @@ static const char* pop_string(struct vm* vm) {
 
 // static int pop_string_check(struct vm* vm, const char** out_string) {
 //     struct object obj = pop();
-//     if (obj.type != OBJ_STRING) {
-//         ERROR("string required, got %d", obj.type);
-//         return 1;
-//     }
+//     EXPECT_OBJECT(obj.type, OBJ_STRING);
 //
 //     *out_string = obj.str_value;
 //     return 0;
@@ -106,20 +99,12 @@ bool pop_bool(struct vm* vm) {
     return obj.bool_value;
 }
 
-bool pop_bool_check(struct vm* vm, bool* out_bool) {
+int pop_bool_check(struct vm* vm, bool* out_bool) {
     struct object obj = pop();
-    if (obj.type != OBJ_BOOL) {
-        ERROR("bool required, got %d", obj.type);
-        return 1;
-    }
+    EXPECT_OBJECT(obj.type, OBJ_BOOL);
 
     *out_bool = obj.bool_value;
     return 0;
-}
-
-static void call(struct vm* vm, int32_t index, uint32_t n_args) {
-    vm->stack_base = vm->stack_size - n_args;
-    vm->program_counter = vm->start_address + index - 1;
 }
 
 static void ret(struct vm* vm) {
@@ -133,21 +118,11 @@ static void ret(struct vm* vm) {
     vm->program_counter = index - 1;
 }
 
-
 #define read_value(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1)))
 
 #define read_value_increment(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
-
-#define pop_args(n_args) \
-{ \
-    for (int32_t i = 0; i < n_args; ++i) { \
-        (void)pop(); \
-    } \
-    (void)pop(); \
-    (void)pop(); \
-}
 
 int execute(struct vm* vm) {
     vm->program_counter = vm->start_address;
@@ -184,7 +159,7 @@ int execute(struct vm* vm) {
                 break;
 
             case POP:
-                --vm->stack_size;
+                (void)pop();
                 break;
 
             case ADD:
@@ -193,13 +168,11 @@ int execute(struct vm* vm) {
                     struct object value2 = pop();
 
                     operation_fun operation = addition_table[value1.type];
-                    if (operation == NULL) {
-                        ERROR("addition not possible for operands of type: %d and %d", value1.type, value2.type);
-                        return 1;
-                    }
+                    CHECK_NULL(operation, "can't add objects of type: %s and %s", rev_objects[value1.type], rev_objects[value2.type]);
 
                     struct object result;
                     CHECK(operation(vm, &value1, &value2, &result), "failed to add objects");
+
                     push(result);
                 }
                 break;
@@ -254,17 +227,13 @@ int execute(struct vm* vm) {
                     struct object exp1 = pop();
                     struct object exp2 = pop();
 
-                    if (exp1.type == OBJ_NUMBER && exp2.type == OBJ_NUMBER) {
-                        push_bool(vm, exp1.num_value == exp2.num_value);
-                        break;
-                    }
+                    operation_fun operation = equality_table[exp1.type];
+                    CHECK_NULL(operation, "equality not possible for operands of type: %s and %s", rev_objects[exp1.type], rev_objects[exp2.type]);
 
-                    if (exp1.type == OBJ_BOOL && exp2.type == OBJ_BOOL) {
-                        push_bool(vm, exp1.bool_value == exp2.bool_value);
-                        break;
-                    }
+                    struct object result;
+                    CHECK(operation(vm, &exp1, &exp2, &result), "failed to add objects");
 
-                    push_bool(vm, false);
+                    push(result);
                 }
                 break;
 
@@ -273,17 +242,14 @@ int execute(struct vm* vm) {
                     struct object exp1 = pop();
                     struct object exp2 = pop();
 
-                    if (exp1.type == OBJ_NUMBER && exp2.type == OBJ_NUMBER) {
-                        push_bool(vm, exp1.num_value != exp2.num_value);
-                        break;
-                    }
+                    operation_fun operation = equality_table[exp1.type];
+                    CHECK_NULL(operation, "difference not possible for operands of type: %s and %s", rev_objects[exp1.type], rev_objects[exp2.type]);
 
-                    if (exp1.type == OBJ_BOOL && exp2.type == OBJ_BOOL) {
-                        push_bool(vm, exp1.bool_value != exp2.bool_value);
-                        break;
-                    }
+                    struct object result;
+                    CHECK(operation(vm, &exp1, &exp2, &result), "failed to add objects");
 
-                    push_bool(vm, true);
+                    result.bool_value = !result.bool_value;
+                    push(result);
                 }
                 break;
 
@@ -423,110 +389,30 @@ int execute(struct vm* vm) {
                     struct object o = pop();
                     int32_t n_args = read_value_increment(int32_t);
 
-                    if (o.type == OBJ_CLASS) {
-                        gc_clean(vm);
+                    call_fun call_cb = callable_table[o.type];
+                    CHECK_NULL(call_cb, "object of type %s can't be called", rev_tokens[o.type]);
 
-                        struct object_class* cls = o.class_value;
-                        struct object_instance* value = gc_alloc(vm, sizeof(*value));
-                        if (value == NULL) {
-                            MEMORY_ERROR();
-                            return 1;
-                        }
-
-                        if (cls->type == USER) {
-                            *value = (struct object_instance) {
-                                .type = USER,
-                                .class_index = cls
-                            };
-                        } else if (cls->type == BUILT_IN) {
-                            *value = (struct object_instance) {
-                                .type = BUILT_IN,
-                                .buintin_index = &vm->builtin_classes[cls->index]
-                            };
-                        } else {
-                            ERROR("class type: %d unknown", cls->type);
-                            return 1;
-                        }
-
-                        struct object o = (struct object) {
-                            .type = OBJ_INSTANCE,
-                            .instance_value = value
-                        };
-
-                        if (cls->type == BUILT_IN) {
-                            if (vm->builtin_classes[cls->index].constructor) {
-                                vm->builtin_classes[cls->index].constructor(o, vm);
-                                pop_args(n_args);
-                            }
-                            push(o);
-                            break;
-
-                        } else if (cls->type == USER) {
-                            if(cls->constructor >= 0) {
-                                push(o);
-                                call(vm, cls->constructor, n_args + 1);
-                                break;
-                            }
-                        } else {
-                            ERROR("class type: %d unknown", cls->type);
-                            return 1;
-                        }
-
-                        pop_args(0)
-                        push(o);
-
-                        break;
-                    } else if (o.type == OBJ_METHOD) {
-                        if (o.method_value->type == USER) {
-                            push(o.method_value->context);
-                            call(vm, o.method_value->index, n_args + 1);
-                        } else if (o.method_value->type == BUILT_IN) {
-                            struct object* instance = &o.method_value->context;
-                            struct class_* cls = instance->instance_value->buintin_index;
-                            struct method* method = &cls->methods[o.method_value->index];
-
-                            struct object result = method->method(*instance, vm);
-                            pop_args(n_args);
-
-                            push(result);
-                        } else {
-                            ERROR("method of type: %d unknown", o.method_value->type);
-                            return 1;
-                        }
-
-                        break;
-                    } else if (o.type == OBJ_FUNCTION) {
-                        if (o.function_value->type == USER) {
-                            call(vm, o.function_value->index, n_args);
-                        } else if (o.function_value->type == BUILT_IN) {
-                            struct object result = vm->builtin_functions[o.function_value->index].fun(vm);
-                            pop_args(n_args);
-
-                            push(result);
-                        }
-                    } else {
-                        ERROR("can't call object of type: %d", o.type);
-                        return 1;
-                    }
+                    CHECK(call_cb(vm, &o, n_args), "failed to call object of type: %d", o.type);
                 }
+
                 break;
 
             case GET_FIELD:
                 {
                     const char* field_name = pop_string(vm);
                     struct object instance = pop();
-                    if (instance.type != OBJ_INSTANCE) {
-                        ERROR("can't get field of object of type: %d", instance.type);
-                        return 1;
-                    }
 
-                    if (instance.instance_value->type == BUILT_IN) {
-                        struct class_* cls = instance.instance_value->buintin_index;
+                    EXPECT_OBJECT(instance.type, OBJ_INSTANCE);
+
+                    struct object_instance* instance_value = instance.instance_value;
+
+                    if (instance_value->type == BUILT_IN) {
+                        struct class_* cls = instance_value->buintin_index;
 
                         uint32_t i;
                         for (i = 0; i < cls->n_members; ++i) {
                             if (strcmp(cls->members[i], field_name) == 0) {
-                                push(instance.instance_value->members[i]);
+                                push(instance_value->members[i]);
                                 break;
                             }
                         }
@@ -537,7 +423,12 @@ int execute(struct vm* vm) {
 
                         for (i = 0; i < cls->n_methods; ++i) {
                             if (strcmp(cls->methods[i].name, field_name) == 0) {
-                                push_method(vm, &(struct object_method){.type = BUILT_IN, .index = i, .n_parameters = 0, .context = instance});
+                                push_method(vm, &(struct object_method){
+                                    .type = BUILT_IN,
+                                    .index = i,
+                                    .n_parameters = 0,
+                                    .context = instance
+                                });
                                 break;
                             }
                         }
@@ -550,73 +441,88 @@ int execute(struct vm* vm) {
                         return 1;
                     }
 
-                    struct object_class* cls = instance.instance_value->class_index;
+                    if (instance_value->type == USER) {
+                        struct object_class* cls = instance_value->class_index;
 
-                    uint32_t i;
-                    for (i = 0; i < cls->n_members; ++i) {
-                        if (strcmp(cls->members[i], field_name) == 0) {
-                            push(instance.instance_value->members[i]);
+                        uint32_t i;
+                        for (i = 0; i < cls->n_members; ++i) {
+                            if (strcmp(cls->members[i], field_name) == 0) {
+                                push(instance_value->members[i]);
+                                break;
+                            }
+                        }
+
+                        if (i < cls->n_members) {
                             break;
                         }
-                    }
 
-                    if (i < cls->n_members) {
-                        break;
-                    }
+                        for (i = 0; i < cls->n_methods; ++i) {
+                            if (strcmp(cls->methods[i].name, field_name) == 0) {
+                                struct pair* method = &cls->methods[i];
 
-                    for (i = 0; i < cls->n_methods; ++i) {
-                        if (strcmp(cls->methods[i].name, field_name) == 0) {
-                            push_method(vm, &(struct object_method){.type = USER, .index = cls->methods[i].index, .n_parameters = cls->methods[i].n_parameters, .context = instance});
+                                push_method(vm, &(struct object_method){
+                                    .type = USER,
+                                    .index = method->index,
+                                    .n_parameters = method->n_parameters,
+                                    .context = instance
+                                });
+                                break;
+                            }
+                        }
+
+                        if (i < cls->n_methods) {
                             break;
                         }
-                    }
 
-                    if (i < cls->n_methods) {
-                        break;
+                        ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
+                        return 1;
                     }
-
-                    ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
-                    return 1;
                 }
                 break;
 
             case SET_FIELD:
                 {
                     const char* field_name = pop_string(vm);
-
                     struct object instance = pop();
 
-                    if (instance.instance_value->type == BUILT_IN) {
-                        struct class_* cls = instance.instance_value->buintin_index;
+                    EXPECT_OBJECT(instance.type, OBJ_INSTANCE);
+
+                    struct object_instance* instance_value = instance.instance_value;
+
+                    if (instance_value->type == BUILT_IN) {
+                        struct class_* cls = instance_value->buintin_index;
 
                         uint32_t i;
                         for (i = 0; i < cls->n_members; ++i) {
                             if (strcmp(cls->members[i], field_name) == 0) {
-                                instance.instance_value->members[i] = pop();
+                                instance_value->members[i] = pop();
                                 break;
                             }
                         }
 
                         if (i == cls->n_members) {
-                            ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
+                            ERROR("property: %s does not exist in class: %s", field_name, cls->name);
                             return 1;
                         }
 
                         break;
                     }
 
-                    struct object_class* cls = instance.instance_value->class_index;
-                    uint32_t i;
-                    for (i = 0; i < cls->n_members; ++i) {
-                        if (strcmp(cls->members[i], field_name) == 0) {
-                            instance.instance_value->members[i] = pop();
-                            break;
-                        }
-                    }
+                    if (instance_value->type == USER) {
+                        struct object_class* cls = instance_value->class_index;
 
-                    if (i == cls->n_members) {
-                        ERROR("property: %s does not exist in class: %s", field_name, cls->name);
-                        return 1;
+                        uint32_t i;
+                        for (i = 0; i < cls->n_members; ++i) {
+                            if (strcmp(cls->members[i], field_name) == 0) {
+                                instance_value->members[i] = pop();
+                                break;
+                            }
+                        }
+
+                        if (i == cls->n_members) {
+                            ERROR("property: %s does not exist in class: %s", field_name, cls->name);
+                            return 1;
+                        }
                     }
                 }
                 break;

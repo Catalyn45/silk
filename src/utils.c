@@ -103,6 +103,17 @@ static const char* rev_instruction[] = {
     "SET_FIELD",
 };
 
+const char* rev_objects[] = {
+    "OBJ_NUMBER",
+    "OBJ_STRING",
+    "OBJ_BOOL",
+    "OBJ_USER",
+    "OBJ_FUNCTION",
+    "OBJ_METHOD",
+    "OBJ_INSTANCE",
+    "OBJ_CLASS"
+};
+
 void disassembly(const uint8_t* bytes, uint32_t n_bytes, uint32_t start_address) {
     for (uint32_t i = start_address; i < n_bytes; ++i) {
         printf("%-3d : %s", i, rev_instruction[bytes[i]]);

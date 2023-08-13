@@ -13,6 +13,19 @@ static struct object print_object(struct vm* vm) {
         printf("%d\n", o.num_value);
     } else if (o.type == OBJ_STRING) {
         printf("%s\n", o.str_value);
+    } else if (o.type == OBJ_BOOL) {
+        printf("%s\n", o.bool_value ? "true" : "false");
+    } else if (o.type == OBJ_CLASS) {
+        printf("class(%s)\n", o.class_value->name);
+    } else if (o.type == OBJ_INSTANCE) {
+        struct object_instance* instance = o.instance_value;
+        printf("instance(%s)\n", instance->type == USER ? instance->class_index->name : instance->buintin_index->name);
+    } else if (o.type == OBJ_METHOD) {
+        puts("method");
+    } else if (o.type == OBJ_FUNCTION) {
+        puts("function");
+    } else if (o.type == OBJ_USER) {
+        puts("user");
     }
 
     return (struct object){};
@@ -69,8 +82,8 @@ int add_builtin_functions(struct evaluator* e) {
     e->functions[e->n_functions++] = (struct function){.name = "print",        .n_parameters = 1, .fun = print_object, .index = index++};
     e->functions[e->n_functions++] = (struct function){.name = "input_number", .n_parameters = 1, .fun = input_number, .index = index++};
     e->functions[e->n_functions++] = (struct function){.name = "input_string", .n_parameters = 1, .fun = input_string, .index = index++};
-    e->functions[e->n_functions++] = (struct function){.name = "str", .n_parameters = 1, .fun = to_string, .index = index++};
-    e->functions[e->n_functions++] = (struct function){.name = "int", .n_parameters = 1, .fun = to_int, .index = index++};
+    e->functions[e->n_functions++] = (struct function){.name = "str",          .n_parameters = 1, .fun = to_string,    .index = index++};
+    e->functions[e->n_functions++] = (struct function){.name = "int",          .n_parameters = 1, .fun = to_int,       .index = index++};
 
     return 0;
 };
