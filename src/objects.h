@@ -12,7 +12,8 @@ enum object_type {
     OBJ_FUNCTION = 4,
     OBJ_METHOD   = 5,
     OBJ_INSTANCE = 6,
-    OBJ_CLASS    = 7
+    OBJ_CLASS    = 7,
+    OBJ_COUNT    = 8
 };
 
 enum implementation_type {

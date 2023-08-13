@@ -11,5 +11,5 @@ def fibonacci(n) {
 }
 
 var n = input_number("insert n number to compute: ")
-print(n + "th fibonacci number is: " + fibonacci(n))
+print(str(n) + "th fibonacci number is: " + str(fibonacci(n)))
 

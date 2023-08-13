@@ -12,6 +12,7 @@
 #include "instructions.h"
 #include "gc.h"
 #include "objects.h"
+#include "operations.h"
 
 static void push_number(struct vm* vm, int32_t number) {
     vm->stack[vm->stack_size++] = (struct object){.type = OBJ_NUMBER, .num_value = number};
@@ -132,34 +133,6 @@ static void ret(struct vm* vm) {
     vm->program_counter = index - 1;
 }
 
-static int add_strings(struct vm* vm, struct object* value1, struct object* value2) {
-    char* new_string = gc_alloc(vm, 500);
-    uint32_t n_new_string = 0;
-
-    if (value1->type == OBJ_NUMBER) {
-        n_new_string += sprintf(new_string, "%d", value1->num_value);
-    } else if (value1->type == OBJ_STRING) {
-        strcpy(new_string, value1->str_value);
-        n_new_string += strlen(value1->str_value);
-    } else {
-        ERROR("can't add objects of type %d and %d", value1->type, value2->type);
-        return 1;
-    }
-
-    if (value2->type == OBJ_NUMBER) {
-        n_new_string += sprintf(new_string + n_new_string, "%d", value2->num_value);
-    } else if (value2->type == OBJ_STRING) {
-        strcpy(new_string + n_new_string, value2->str_value);
-        n_new_string += strlen(value2->str_value);
-    } else {
-        ERROR("can't add objects of type %d and %d", value1->type, value2->type);
-        return 1;
-    }
-
-    push_string(vm, new_string);
-    return 0;
-}
-
 
 #define read_value(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1)))
@@ -219,22 +192,15 @@ int execute(struct vm* vm) {
                     struct object value1 = pop();
                     struct object value2 = pop();
 
-                    if (value1.type == OBJ_STRING || value2.type == OBJ_STRING) {
-                        CHECK(add_strings(vm, &value1, &value2), "failed to add objects");
-                        break;
+                    operation_fun operation = addition_table[value1.type];
+                    if (operation == NULL) {
+                        ERROR("addition not possible for operands of type: %d and %d", value1.type, value2.type);
+                        return 1;
                     }
 
-                    if (value1.type == OBJ_NUMBER && value2.type == OBJ_NUMBER) {
-                        int32_t number1 = value1.num_value;
-                        int32_t number2 = value2.num_value;
-
-                        push_number(vm, number1 + number2);
-                        break;
-                    }
-
-                    ERROR("add operation for object types: %d and %d not defined", value1.type, value2.type);
-                    return 1;
-
+                    struct object result;
+                    CHECK(operation(vm, &value1, &value2, &result), "failed to add objects");
+                    push(result);
                 }
                 break;
 
@@ -548,8 +514,11 @@ int execute(struct vm* vm) {
             case GET_FIELD:
                 {
                     const char* field_name = pop_string(vm);
-
                     struct object instance = pop();
+                    if (instance.type != OBJ_INSTANCE) {
+                        ERROR("can't get field of object of type: %d", instance.type);
+                        return 1;
+                    }
 
                     if (instance.instance_value->type == BUILT_IN) {
                         struct class_* cls = instance.instance_value->buintin_index;

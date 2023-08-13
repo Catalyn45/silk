@@ -7,5 +7,5 @@ def power_2(k) {
 }
 
 var n = input_number("insert n for 2^n to compute: ")
-print("2 to the power of " + n + " is: " + power_2(n))
+print("2 to the power of " + str(n) + " is: " + str(power_2(n)))
 
