@@ -10,10 +10,9 @@ enum object_type {
     OBJ_BOOL     = 2,
     OBJ_USER     = 3,
     OBJ_FUNCTION = 4,
-    OBJ_METHOD   = 5,
-    OBJ_INSTANCE = 6,
-    OBJ_CLASS    = 7,
-    OBJ_COUNT    = 8
+    OBJ_INSTANCE = 5,
+    OBJ_CLASS    = 6,
+    OBJ_COUNT    = 7
 };
 
 enum implementation_type {
@@ -21,68 +20,72 @@ enum implementation_type {
     BUILT_IN = 1
 };
 
-struct object_function {
-    int32_t type;
 
-    int32_t index;
-    int32_t n_parameters;
+typedef void (*free_function)(void* mem);
+struct object_user {
+    void* mem;
+    free_function free_fun;
 };
+
 
 struct object {
     int32_t type;
 
     union {
         int32_t     num_value;
-        const char* str_value;
+        char*       str_value;
         bool        bool_value;
-        void*       user_value;
-        struct object_function* function_value;
-        struct object_method*   method_value;
-        struct object_instance* instance_value;
-        struct object_class*    class_value;
+        void*       obj_value;
     };
 };
 
-struct object_method {
-    int32_t type;
+struct vm;
+typedef struct object (*builtin_fun)(struct object* self, struct vm* vm);
 
-    int32_t index;
-    int32_t n_parameters;
-
-    struct object context;
-};
-
-struct object_instance {
+struct object_function {
     int32_t type;
 
     union {
-        struct object_class* class_index;
-        struct class_*       buintin_index;
+        int32_t index;
+        builtin_fun function;
     };
 
-    struct object members[256];
-    void* context;
+    int32_t n_parameters;
+    struct object context;
 };
 
-struct pair {
+struct named_function {
     const char* name;
-    int32_t index;
-    uint32_t n_parameters;
+    struct object_function function;
 };
+
+struct object_instance {
+    struct object_class* cls;
+    struct object members[256];
+};
+
+typedef void (*object_callback)(struct object* o, void* ctx);
+typedef void (*iterate_function)(struct object_instance* self, object_callback cb, void* ctx);
 
 struct object_class {
     int32_t type;
+
     uint32_t index;
 
-    const char* name;
+    iterate_function iterate_fun;
 
     int32_t constructor;
 
     const char* members[10];
     uint32_t n_members;
 
-    struct pair methods[10];
+    struct named_function methods[10];
     uint32_t n_methods;
+};
+
+struct named_class {
+    const char* name;
+    struct object_class cls;
 };
 
 #endif

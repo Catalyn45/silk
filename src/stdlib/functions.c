@@ -3,10 +3,12 @@
 
 #include "functions.h"
 #include "../objects.h"
+
 #include "../vm.h"
 
+static struct object print_object(struct object* self, struct vm* vm) {
+    (void)self;
 
-static struct object print_object(struct vm* vm) {
     struct object o = peek(0);
 
     if (o.type == OBJ_NUMBER) {
@@ -16,12 +18,9 @@ static struct object print_object(struct vm* vm) {
     } else if (o.type == OBJ_BOOL) {
         printf("%s\n", o.bool_value ? "true" : "false");
     } else if (o.type == OBJ_CLASS) {
-        printf("class(%s)\n", o.class_value->name);
+        printf("class\n");
     } else if (o.type == OBJ_INSTANCE) {
-        struct object_instance* instance = o.instance_value;
-        printf("instance(%s)\n", instance->type == USER ? instance->class_index->name : instance->buintin_index->name);
-    } else if (o.type == OBJ_METHOD) {
-        puts("method");
+        printf("instance\n");
     } else if (o.type == OBJ_FUNCTION) {
         puts("function");
     } else if (o.type == OBJ_USER) {
@@ -31,7 +30,9 @@ static struct object print_object(struct vm* vm) {
     return (struct object){};
 }
 
-static struct object input_number(struct vm* vm) {
+static struct object input_number(struct object* self, struct vm* vm) {
+    (void)self;
+
     struct object o = peek(0);
 
     const char* input_text = o.str_value;
@@ -45,15 +46,20 @@ static struct object input_number(struct vm* vm) {
     return (struct object){.type = OBJ_NUMBER, .num_value = number};
 };
 
-static struct object to_string(struct vm* vm) {
-    char* str = gc_alloc(vm, 200);
+static struct object to_string(struct object* self, struct vm* vm) {
+    (void)self;
+
+    char* str = gc_alloc(vm, OBJ_STRING, 200);
+
     struct object num = peek(0);
 
     sprintf(str, "%d", num.num_value);
     return (struct object){.type = OBJ_STRING, .str_value = str};
 }
 
-static struct object to_int(struct vm* vm) {
+static struct object to_int(struct object* self, struct vm* vm) {
+    (void)self;
+
     struct object str = peek(0);
 
     char* end = NULL;
@@ -62,13 +68,15 @@ static struct object to_int(struct vm* vm) {
     return (struct object){.type = OBJ_NUMBER, .num_value = num};
 }
 
-static struct object input_string(struct vm* vm) {
+static struct object input_string(struct object* self, struct vm* vm) {
+    (void)self;
+
     struct object o = peek(0);
 
     const char* input_text = o.str_value;
     printf("%s", input_text);
 
-    char* string = gc_alloc(vm, 200);
+    char* string = gc_alloc(vm, OBJ_STRING, 200);
     scanf("%s", string);
 
     puts("");
@@ -77,13 +85,11 @@ static struct object input_string(struct vm* vm) {
 }
 
 int add_builtin_functions(struct evaluator* e) {
-    uint32_t index = 0;
-
-    e->functions[e->n_functions++] = (struct function){.name = "print",        .n_parameters = 1, .fun = print_object, .index = index++};
-    e->functions[e->n_functions++] = (struct function){.name = "input_number", .n_parameters = 1, .fun = input_number, .index = index++};
-    e->functions[e->n_functions++] = (struct function){.name = "input_string", .n_parameters = 1, .fun = input_string, .index = index++};
-    e->functions[e->n_functions++] = (struct function){.name = "str",          .n_parameters = 1, .fun = to_string,    .index = index++};
-    e->functions[e->n_functions++] = (struct function){.name = "int",          .n_parameters = 1, .fun = to_int,       .index = index++};
+    e->functions[e->n_functions++] = (struct named_function){.name = "print", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = print_object}};
+    e->functions[e->n_functions++] = (struct named_function){.name = "input_number", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = input_number}};
+    e->functions[e->n_functions++] = (struct named_function){.name = "input_string", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = input_string}};
+    e->functions[e->n_functions++] = (struct named_function){.name = "str", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = to_string}};
+    e->functions[e->n_functions++] = (struct named_function){.name = "int", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = to_int}};
 
     return 0;
 };

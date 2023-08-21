@@ -27,15 +27,11 @@ static void push_bool(struct vm* vm, bool value) {
 }
 
 static void push_func(struct vm* vm, struct object_function* func) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_FUNCTION, .function_value = func};
-}
-
-static void push_method(struct vm* vm, struct object_method* method) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_METHOD, .method_value = method};
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_FUNCTION, .obj_value = func};
 }
 
 static void push_class(struct vm* vm, struct object_class* cls) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_CLASS, .class_value = cls};
+    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_CLASS, .obj_value = cls};
 }
 
 static void push_constant(struct vm* vm, int32_t address) {
@@ -86,14 +82,6 @@ static const char* pop_string(struct vm* vm) {
     return obj.str_value;
 }
 
-// static int pop_string_check(struct vm* vm, const char** out_string) {
-//     struct object obj = pop();
-//     EXPECT_OBJECT(obj.type, OBJ_STRING);
-//
-//     *out_string = obj.str_value;
-//     return 0;
-// }
-
 bool pop_bool(struct vm* vm) {
     struct object obj = pop();
     return obj.bool_value;
@@ -128,7 +116,7 @@ int execute(struct vm* vm) {
     vm->program_counter = vm->start_address;
 
     // run gc at this number of allocated objects
-    vm->gc.treshold = 20;
+    vm->gc.treshold = 1;
 
     while (!vm->halt && vm->program_counter < vm->n_bytes) {
         switch (vm->bytes[vm->program_counter]) {
@@ -402,81 +390,10 @@ int execute(struct vm* vm) {
                     const char* field_name = pop_string(vm);
                     struct object instance = pop();
 
-                    EXPECT_OBJECT(instance.type, OBJ_INSTANCE);
+                    field_fun field_cb = get_table[instance.type];
+                    CHECK_NULL(field_cb, "object of type %s can't be getted", rev_tokens[instance.type]);
 
-                    struct object_instance* instance_value = instance.instance_value;
-
-                    if (instance_value->type == BUILT_IN) {
-                        struct class_* cls = instance_value->buintin_index;
-
-                        uint32_t i;
-                        for (i = 0; i < cls->n_members; ++i) {
-                            if (strcmp(cls->members[i], field_name) == 0) {
-                                push(instance_value->members[i]);
-                                break;
-                            }
-                        }
-
-                        if (i < cls->n_members) {
-                            break;
-                        }
-
-                        for (i = 0; i < cls->n_methods; ++i) {
-                            if (strcmp(cls->methods[i].name, field_name) == 0) {
-                                push_method(vm, &(struct object_method){
-                                    .type = BUILT_IN,
-                                    .index = i,
-                                    .n_parameters = 0,
-                                    .context = instance
-                                });
-                                break;
-                            }
-                        }
-
-                        if (i < cls->n_methods) {
-                            break;
-                        }
-
-                        ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
-                        return 1;
-                    }
-
-                    if (instance_value->type == USER) {
-                        struct object_class* cls = instance_value->class_index;
-
-                        uint32_t i;
-                        for (i = 0; i < cls->n_members; ++i) {
-                            if (strcmp(cls->members[i], field_name) == 0) {
-                                push(instance_value->members[i]);
-                                break;
-                            }
-                        }
-
-                        if (i < cls->n_members) {
-                            break;
-                        }
-
-                        for (i = 0; i < cls->n_methods; ++i) {
-                            if (strcmp(cls->methods[i].name, field_name) == 0) {
-                                struct pair* method = &cls->methods[i];
-
-                                push_method(vm, &(struct object_method){
-                                    .type = USER,
-                                    .index = method->index,
-                                    .n_parameters = method->n_parameters,
-                                    .context = instance
-                                });
-                                break;
-                            }
-                        }
-
-                        if (i < cls->n_methods) {
-                            break;
-                        }
-
-                        ERROR("attribute: %s does not exist in class: %s", field_name, cls->name);
-                        return 1;
-                    }
+                    CHECK(field_cb(vm, &instance, field_name), "failed to getted object of type: %d", instance.type);
                 }
                 break;
 
@@ -485,45 +402,10 @@ int execute(struct vm* vm) {
                     const char* field_name = pop_string(vm);
                     struct object instance = pop();
 
-                    EXPECT_OBJECT(instance.type, OBJ_INSTANCE);
+                    field_fun field_cb = set_table[instance.type];
+                    CHECK_NULL(field_cb, "object of type %s can't be setted", rev_tokens[instance.type]);
 
-                    struct object_instance* instance_value = instance.instance_value;
-
-                    if (instance_value->type == BUILT_IN) {
-                        struct class_* cls = instance_value->buintin_index;
-
-                        uint32_t i;
-                        for (i = 0; i < cls->n_members; ++i) {
-                            if (strcmp(cls->members[i], field_name) == 0) {
-                                instance_value->members[i] = pop();
-                                break;
-                            }
-                        }
-
-                        if (i == cls->n_members) {
-                            ERROR("property: %s does not exist in class: %s", field_name, cls->name);
-                            return 1;
-                        }
-
-                        break;
-                    }
-
-                    if (instance_value->type == USER) {
-                        struct object_class* cls = instance_value->class_index;
-
-                        uint32_t i;
-                        for (i = 0; i < cls->n_members; ++i) {
-                            if (strcmp(cls->members[i], field_name) == 0) {
-                                instance_value->members[i] = pop();
-                                break;
-                            }
-                        }
-
-                        if (i == cls->n_members) {
-                            ERROR("property: %s does not exist in class: %s", field_name, cls->name);
-                            return 1;
-                        }
-                    }
+                    CHECK(field_cb(vm, &instance, field_name), "failed to setted object of type: %d", instance.type);
                 }
                 break;
             case RET:

@@ -1,0 +1,27 @@
+class T {
+    var a
+    def constructor() {
+        self.a = 10
+    }
+
+    def print() {
+        print(self.a)
+    }
+
+    def change(a) {
+        self.a = a
+    }
+}
+
+var l = list()
+var t = T()
+l.add(t)
+t = 'a'
+l.add(T())
+l.add(T())
+l.add(T())
+l.add(T())
+print(l[0].a)
+l = 10
+l = list()
+

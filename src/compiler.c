@@ -46,7 +46,7 @@ static uint32_t pop_variables(uint32_t scope, struct evaluator* e) {
     return count;
 }
 
-static struct function* get_function(const char* function_name, struct evaluator* e) {
+static struct named_function* get_function(const char* function_name, struct evaluator* e) {
     for (uint i = 0; i < e->n_functions; ++i) {
         if (strcmp(e->functions[i].name, function_name) == 0) {
             return &e->functions[i];
@@ -56,7 +56,7 @@ static struct function* get_function(const char* function_name, struct evaluator
     return NULL;
 }
 
-static struct class_* get_class(const char* class_name, struct evaluator* e) {
+static struct named_class* get_class(const char* class_name, struct evaluator* e) {
     for (uint i = 0; i < e->n_classes; ++i) {
         if (strcmp(e->classes[i].name, class_name) == 0) {
             return &e->classes[i];
@@ -92,7 +92,7 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
     }
 
     if (o->type == OBJ_FUNCTION) {
-        *(struct object_function*)(&data->constants_bytes[data->n_constants_bytes]) = *o->function_value;
+        *(struct object_function*)(&data->constants_bytes[data->n_constants_bytes]) = *(struct object_function*)o->obj_value;
         data->n_constants_bytes += sizeof(struct object_function);
 
         *out_address = constant_address;
@@ -100,7 +100,7 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
     }
 
     if (o->type == OBJ_CLASS) {
-        *(struct object_class*)(&data->constants_bytes[data->n_constants_bytes]) = *o->class_value;
+        *(struct object_class*)(&data->constants_bytes[data->n_constants_bytes]) = *(struct object_class*)o->obj_value;
         data->n_constants_bytes += sizeof(struct object_class);
 
         *out_address = constant_address;
@@ -171,10 +171,6 @@ static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_
             }
         case NODE_INDEX:
             {
-                add_instruction(PUSH_BASE);
-                add_instruction(PUSH_ADDR);
-                int32_t placeholder = create_placeholder();
-
                 CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope, ctx), "failed to evaluate left member of member index expression");
 
                 CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to evaluate left member of member index");
@@ -189,7 +185,6 @@ static int evaluate_lvalue(struct evaluator* e, struct node* ast, struct binary_
                 add_instruction(CALL);
                 int32_t n_args = 2;
                 add_number(n_args);
-                patch_placeholder(placeholder);
 
                 return 0;
             }
@@ -256,15 +251,11 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 }
 
                 const char* name = ast->token->value;
-                struct function* f = get_function(name, e);
+                struct named_function* f = get_function(name, e);
                 if (f) {
                     struct object o = {
                         .type = OBJ_FUNCTION,
-                        .function_value = &(struct object_function) {
-                            .type = BUILT_IN,
-                            .n_parameters = f->n_parameters,
-                            .index = f->index
-                        }
+                        .obj_value = &f->function
                     };
 
                     int32_t out_address;
@@ -276,14 +267,11 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                     return 0;
                 }
 
-                struct class_* c = get_class(name, e);
+                struct named_class* c = get_class(name, e);
                 if (c) {
                     struct object o = {
                         .type = OBJ_CLASS,
-                        .class_value = &(struct object_class) {
-                            .type = BUILT_IN,
-                            .index = c->index
-                        }
+                        .obj_value = &c->cls
                     };
 
                     int32_t out_address;
@@ -422,12 +410,22 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
             }
         case NODE_ASSIGN:
             {
+                int32_t placeholder;
+                if (ast->left->type == NODE_INDEX) {
+                    add_instruction(PUSH_BASE);
+                    add_instruction(PUSH_ADDR);
+                    placeholder = create_placeholder();
+                }
+
                 // first evaluate value to assign
                 CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope, ctx), "failed to evaluate assignment value");
 
                 // then evaluate the lvalue
                 CHECK(evaluate_lvalue(e, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to evaluate lvalue");
 
+                if (ast->left->type == NODE_INDEX) {
+                    patch_placeholder(placeholder);
+                }
                 return 0;
             }
         case NODE_STATEMENT:
@@ -462,17 +460,18 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 const char* class_name = ast->token->value;
                 struct object cls = {
                     .type = OBJ_CLASS,
-                    .class_value = &(struct object_class) {
-                        .name = class_name,
-                        .constructor = -1
+                    .obj_value = &(struct object_class) {
+                        .type = USER,
+                        .constructor = -1,
+                        .index = data->n_program_bytes,
                     }
                 };
 
                 // evaluate members
-                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope, cls.class_value), "failed to evaluate class members");
+                CHECK(evaluate(e, ast->left, data, current_stack_index, function_scope, current_scope, cls.obj_value), "failed to evaluate class members");
 
                 // evaluate methods
-                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope, cls.class_value), "failed to evaluate class methods");
+                CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope, cls.obj_value), "failed to evaluate class methods");
 
                 int32_t out_address;
                 add_constant(data, &cls, &out_address);
@@ -528,18 +527,22 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
 
                 CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1, current_scope, ctx), "failed to evaluate function body");
 
+                current_class->methods[current_class->n_methods++] = (struct named_function){
+                    .name = ast->token->value,
+                    .function = {
+                        .type = USER,
+                        .index = method_address,
+                        .n_parameters = n_parameters
+                    }
+                };
+
                 if (strcmp(ast->token->value, "constructor") == 0) {
-                    current_class->constructor = method_address;
+                    current_class->constructor = current_class->n_methods - 1;
 
                     add_instruction(DUP_LOC);
                     int32_t self_pos = n_parameters - 1;
                     add_number(self_pos);
                 } else {
-                    current_class->methods[current_class->n_methods++] = (struct pair){
-                        .name = ast->token->value,
-                        .index = method_address
-                    };
-
                     add_instruction(PUSH_FALSE);
                 }
 
@@ -562,7 +565,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                 const char* fun_name = ast->token->value;
                 struct object o = {
                     .type = OBJ_FUNCTION,
-                    .function_value = &(struct object_function) {
+                    .obj_value = &(struct object_function) {
                         .type = USER,
                         .n_parameters = n_parameters,
                         .index = data->n_program_bytes + sizeof(int32_t) + sizeof(int32_t) + 2
@@ -590,6 +593,9 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
                     parameter = parameter->right;
                 }
 
+                add_variable("self", current_scope + 1, new_stack_index++, e);
+                ++n_parameters;
+
                 CHECK(evaluate(e, ast->right, data, &new_stack_index, function_scope + 1, current_scope, ctx), "failed to evaluate function body");
 
                 // TODO: double ret in case of return
@@ -604,7 +610,7 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
 
                 add_instruction(PUSH_BASE);
                 add_instruction(PUSH_ADDR);
-                int placeholder = create_placeholder();
+                int32_t placeholder = create_placeholder();
 
                 uint32_t n_arguments = 0;
                 struct node* argument = ast->right;
@@ -639,9 +645,9 @@ int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, ui
             }
         case NODE_INDEX:
             {
-
                 add_instruction(PUSH_BASE);
                 add_instruction(PUSH_ADDR);
+
                 int32_t placeholder = create_placeholder();
 
                 CHECK(evaluate(e, ast->right, data, current_stack_index, function_scope, current_scope, ctx), "failed to evaluate left member of member index expression");

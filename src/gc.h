@@ -6,6 +6,7 @@
 
 struct gc_item {
     bool marked;
+    int32_t type;
     void* memory;
 };
 
@@ -17,7 +18,7 @@ struct gc {
 
 struct vm;
 
-void* gc_alloc(struct vm* vm, size_t size);
+void* gc_alloc(struct vm* vm, int32_t type, size_t size);
 void gc_clean(struct vm* vm);
 
 #endif

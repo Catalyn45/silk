@@ -1,0 +1,29 @@
+class T {
+    var a
+    def constructor() {
+        self.a = 10
+    }
+
+    def print() {
+        print(self.a)
+    }
+
+    def change(a) {
+        self.a = a
+    }
+}
+
+var t = T()
+t.print()
+t.change(20)
+t.print()
+
+var l = list()
+l.add(444)
+l.add(333)
+l.add('laca')
+print(l.pop())
+print(l[0])
+l[0] = 555
+print(l[0])
+

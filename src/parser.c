@@ -21,15 +21,18 @@
     }\
 }
 
-static int parse_expression(struct parser* parser, struct node** root);
+struct context {
+};
 
-static int parse_primary(struct parser* parser, struct node** root) {
+static int parse_expression(struct parser* parser, struct node** root, struct context* ctx);
+
+static int parse_primary(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     if (current_token->code == TOK_LPR) {
         advance();
 
-        CHECK(parse_expression(parser, root), "failed to parse expression");
+        CHECK(parse_expression(parser, root, ctx), "failed to parse expression");
 
         current_token = get_token();
 
@@ -83,7 +86,7 @@ static int parse_primary(struct parser* parser, struct node** root) {
     return 1;
 }
 
-static int parse_argument_list(struct parser* parser, struct node** root ) {
+static int parse_argument_list(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_LPR);
@@ -95,7 +98,7 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
 
     while (current_token->code != TOK_RPR) {
         struct node* argument;
-        CHECK(parse_expression(parser, &argument), "failed to parse argument");
+        CHECK(parse_expression(parser, &argument, ctx), "failed to parse argument");
 
         current_token = get_token();
         if (current_token->code != TOK_RPR) {
@@ -114,16 +117,26 @@ static int parse_argument_list(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_postfix(struct parser* parser, struct node** root) {
+static int sugar_index_access(struct parser* parser, struct node** root, struct context* ctx) {
+    (void) parser;
+    (void) root;
+    (void) ctx;
+
+    return 0;
+}
+
+static int parse_postfix(struct parser* parser, struct node** root, struct context* ctx) {
+    (void) sugar_index_access;
+
     struct node* left = NULL;
-    CHECK(parse_primary(parser, &left), "failed to parse primary");
+    CHECK(parse_primary(parser, &left, ctx), "failed to parse primary");
 
     const struct token* current_token = get_token();
 
     while (true) {
         if (current_token->code == TOK_LPR && (left->flags & CALLABLE)) {
             struct node* function_parameters = NULL;
-            CHECK(parse_argument_list(parser, &function_parameters), "failed to parse argument list");
+            CHECK(parse_argument_list(parser, &function_parameters, ctx), "failed to parse argument list");
             struct node* function_node = node_new(NODE_CALL, NULL, left, function_parameters);
             function_node->flags |= CALLABLE;
 
@@ -149,7 +162,7 @@ static int parse_postfix(struct parser* parser, struct node** root) {
             advance();
 
             struct node* expression;
-            CHECK(parse_expression(parser, &expression), "failed to parse expression");
+            CHECK(parse_expression(parser, &expression, ctx), "failed to parse expression");
 
             current_token = get_token();
 
@@ -172,14 +185,14 @@ static int parse_postfix(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_unary(struct parser* parser, struct node** root) {
+static int parse_unary(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     if (current_token->code == TOK_NOT) {
         advance();
 
         struct node* not_unary;
-        CHECK(parse_unary(parser, &not_unary), "failed to parse unary");
+        CHECK(parse_unary(parser, &not_unary, ctx), "failed to parse unary");
 
         struct node* not_node = node_new(NODE_NOT, NULL, not_unary, NULL);
         CHECK_NODE(not_node);
@@ -189,13 +202,13 @@ static int parse_unary(struct parser* parser, struct node** root) {
         return 0;
     }
 
-    CHECK(parse_postfix(parser, root), "failed to parse postfix");
+    CHECK(parse_postfix(parser, root, ctx), "failed to parse postfix");
     return 0;
 }
 
-static int parse_multiplicative(struct parser* parser, struct node** root) {
+static int parse_multiplicative(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* left;
-    CHECK(parse_unary(parser, &left), "failed to parse unary");
+    CHECK(parse_unary(parser, &left, ctx), "failed to parse unary");
 
     const struct token* current_token = get_token();
     while (
@@ -205,7 +218,7 @@ static int parse_multiplicative(struct parser* parser, struct node** root) {
         advance();
 
         struct node* right;
-        CHECK(parse_unary(parser, &right), "failed to parse unary");
+        CHECK(parse_unary(parser, &right, ctx), "failed to parse unary");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
@@ -219,9 +232,9 @@ static int parse_multiplicative(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_additive(struct parser* parser, struct node** root) {
+static int parse_additive(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* left;
-    CHECK(parse_multiplicative(parser, &left), "failed to parse multiplicative");
+    CHECK(parse_multiplicative(parser, &left, ctx), "failed to parse multiplicative");
 
     const struct token* current_token = get_token();
     while (
@@ -231,7 +244,7 @@ static int parse_additive(struct parser* parser, struct node** root) {
         advance();
 
         struct node* right;
-        CHECK(parse_multiplicative(parser, &right), "failed to parse multiplicative");
+        CHECK(parse_multiplicative(parser, &right, ctx), "failed to parse multiplicative");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
@@ -245,9 +258,9 @@ static int parse_additive(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_relational(struct parser* parser, struct node** root) {
+static int parse_relational(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* left;
-    CHECK(parse_additive(parser, &left), "failed to parse additive");
+    CHECK(parse_additive(parser, &left, ctx), "failed to parse additive");
 
     const struct token* current_token = get_token();
     while (
@@ -259,7 +272,7 @@ static int parse_relational(struct parser* parser, struct node** root) {
         advance();
 
         struct node* right;
-        CHECK(parse_additive(parser, &right), "failed to parse additive");
+        CHECK(parse_additive(parser, &right, ctx), "failed to parse additive");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
@@ -273,16 +286,16 @@ static int parse_relational(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_equality(struct parser* parser, struct node** root) {
+static int parse_equality(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* left;
-    CHECK(parse_relational(parser, &left), "failed to parse relational");
+    CHECK(parse_relational(parser, &left, ctx), "failed to parse relational");
 
     const struct token* current_token = get_token();
     while (current_token->code == TOK_DEQ || current_token->code == TOK_NEQ) {
         advance();
 
         struct node* right;
-        CHECK(parse_relational(parser, &right), "failed to parse relational");
+        CHECK(parse_relational(parser, &right, ctx), "failed to parse relational");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
@@ -296,16 +309,16 @@ static int parse_equality(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_and(struct parser* parser, struct node** root) {
+static int parse_and(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* left;
-    CHECK(parse_equality(parser, &left), "failed to parse equality");
+    CHECK(parse_equality(parser, &left, ctx), "failed to parse equality");
 
     const struct token* current_token = get_token();
     while (current_token->code == TOK_AND) {
         advance();
 
         struct node* right;
-        CHECK(parse_equality(parser, &right), "failed to parse equality");
+        CHECK(parse_equality(parser, &right, ctx), "failed to parse equality");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
@@ -319,16 +332,16 @@ static int parse_and(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_or(struct parser* parser, struct node** root) {
+static int parse_or(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* left;
-    CHECK(parse_and(parser, &left), "failed to parse and");
+    CHECK(parse_and(parser, &left, ctx), "failed to parse and");
 
     const struct token* current_token = get_token();
     while (current_token->code == TOK_OR) {
         advance();
 
         struct node* right;
-        CHECK(parse_and(parser, &right), "failed to parse and");
+        CHECK(parse_and(parser, &right, ctx), "failed to parse and");
 
         struct node* bin_op = node_new(NODE_BINARY_OP, current_token, left, right);
         CHECK_NODE(bin_op);
@@ -342,21 +355,21 @@ static int parse_or(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_expression(struct parser* parser, struct node** root) {
-    CHECK(parse_or(parser, root), "failed to parse or");
+static int parse_expression(struct parser* parser, struct node** root, struct context* ctx) {
+    CHECK(parse_or(parser, root, ctx), "failed to parse or");
     return 0;
 }
 
-static int parse_expression_statement(struct parser* parser, struct node** root) {
+static int parse_expression_statement(struct parser* parser, struct node** root, struct context* ctx) {
     struct node* expression;
-    CHECK(parse_expression(parser, &expression), "Failed to pare expression");
+    CHECK(parse_expression(parser, &expression, ctx), "Failed to pare expression");
 
     const struct token* current_token = get_token();
     if (current_token->code == TOK_EQL &&  (expression->flags & LVALUE)) {
         advance();
 
         struct node* assignment_value;
-        CHECK(parse_expression(parser, &assignment_value), "failed to parse expression");
+        CHECK(parse_expression(parser, &assignment_value, ctx), "failed to parse expression");
 
         struct node* assignment_node = node_new(NODE_ASSIGN, NULL, expression, assignment_value);
         CHECK_NODE(assignment_node);
@@ -372,26 +385,26 @@ static int parse_expression_statement(struct parser* parser, struct node** root)
     return 0;
 }
 
-static int parse_block(struct parser* parser, struct node** root, bool brackets);
+static int parse_block(struct parser* parser, struct node** root, struct context* ctx, bool brackets);
 
-static int parse_if(struct parser* parser, struct node** root ) {
+static int parse_if(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_IF)
     advance();
 
     struct node* if_expression;
-    CHECK(parse_expression(parser, &if_expression), "failed to parse expression");
+    CHECK(parse_expression(parser, &if_expression, ctx), "failed to parse expression");
 
     struct node* true_side;
-    CHECK(parse_block(parser, &true_side, true), "failed to parse block");
+    CHECK(parse_block(parser, &true_side, ctx, true), "failed to parse block");
 
     struct node* false_side = NULL;
     current_token = get_token();
     if (current_token->code == TOK_ELS) {
         advance();
 
-        CHECK(parse_block(parser, &false_side, true), "failed to parse block");
+        CHECK(parse_block(parser, &false_side, ctx, true), "failed to parse block");
     }
 
     struct node* decision = node_new(NODE_DECISION, NULL, true_side, false_side);
@@ -404,17 +417,17 @@ static int parse_if(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_while(struct parser* parser, struct node** root ) {
+static int parse_while(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_WHL);
     advance();
 
     struct node* while_expression;
-    CHECK(parse_expression(parser, &while_expression), "failed to parse expression");
+    CHECK(parse_expression(parser, &while_expression, ctx), "failed to parse expression");
 
     struct node* true_side;
-    CHECK(parse_block(parser, &true_side, true), "failed to parse block");
+    CHECK(parse_block(parser, &true_side, ctx, true), "failed to parse block");
 
     struct node* decision = node_new(NODE_DECISION, NULL, true_side, NULL);
     CHECK_NODE(decision);
@@ -428,7 +441,9 @@ static int parse_while(struct parser* parser, struct node** root ) {
 }
 
 
-static int parse_parameter_list(struct parser* parser, struct node** root ) {
+static int parse_parameter_list(struct parser* parser, struct node** root, struct context* ctx) {
+    (void) ctx;
+
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_LPR);
@@ -460,7 +475,7 @@ static int parse_parameter_list(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_function(struct parser* parser, struct node** root) {
+static int parse_function(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_FUN);
@@ -471,10 +486,10 @@ static int parse_function(struct parser* parser, struct node** root) {
     advance();
 
     struct node* arguments;
-    CHECK(parse_parameter_list(parser, &arguments), "failed to parse parameter list");
+    CHECK(parse_parameter_list(parser, &arguments, ctx), "failed to parse parameter list");
 
     struct node* body;
-    CHECK(parse_block(parser, &body, true), "failed to parse block");
+    CHECK(parse_block(parser, &body, ctx, true), "failed to parse block");
 
     struct node* function = node_new(NODE_FUNCTION, function_name, arguments, body);
     CHECK_NODE(function);
@@ -483,7 +498,7 @@ static int parse_function(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_return(struct parser* parser, struct node** root ) {
+static int parse_return(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_RET);
@@ -492,7 +507,7 @@ static int parse_return(struct parser* parser, struct node** root ) {
     // empty return only if last thing  from block
     struct node* expression = NULL;
     if (get_token()->code != TOK_RBR) {
-        CHECK(parse_expression(parser, &expression), "failed to parse expression");
+        CHECK(parse_expression(parser, &expression, ctx), "failed to parse expression");
     }
 
     struct node* return_node = node_new(NODE_RETURN, NULL, expression, NULL);
@@ -503,7 +518,7 @@ static int parse_return(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_declaration(struct parser* parser, struct node** root ) {
+static int parse_declaration(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_VAR);
@@ -519,7 +534,7 @@ static int parse_declaration(struct parser* parser, struct node** root ) {
     struct node* init_value = NULL;
     if (current_token->code == TOK_EQL) {
         advance();
-        CHECK(parse_expression(parser, &init_value), "failed to parse expression");
+        CHECK(parse_expression(parser, &init_value, ctx), "failed to parse expression");
     }
 
     struct node* declaration = node_new(NODE_DECLARATION, identifier, init_value, NULL);
@@ -529,7 +544,7 @@ static int parse_declaration(struct parser* parser, struct node** root ) {
     return 0;
 }
 
-static int parse_class(struct parser* parser, struct node** root) {
+static int parse_class(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
     EXPECT_TOKEN(current_token->code, TOK_CLS);
@@ -566,7 +581,7 @@ static int parse_class(struct parser* parser, struct node** root) {
     struct node* methods = NULL;
     while (current_token->code == TOK_FUN) {
         struct node* method;
-        CHECK(parse_function(parser, &method), "failed to parse method");
+        CHECK(parse_function(parser, &method, ctx), "failed to parse method");
         method->type = NODE_METHOD;
 
         methods = node_new(NODE_METHODS, NULL, method, methods);
@@ -585,44 +600,44 @@ static int parse_class(struct parser* parser, struct node** root) {
     return 0;
 }
 
-static int parse_statement(struct parser* parser, struct node** root ) {
+static int parse_statement(struct parser* parser, struct node** root, struct context* ctx) {
     int current_token_code = get_token()->code;
 
     if (current_token_code == TOK_IF) {
-        CHECK(parse_if(parser, root), "failed to parse if statement");
+        CHECK(parse_if(parser, root, ctx), "failed to parse if statement");
         return 0;
     }
 
     if (current_token_code == TOK_WHL) {
-        CHECK(parse_while(parser, root), "failed to parse while statement");
+        CHECK(parse_while(parser, root, ctx), "failed to parse while statement");
         return 0;
     }
 
     if (current_token_code == TOK_FUN) {
-        CHECK(parse_function(parser, root), "failed to parse function");
+        CHECK(parse_function(parser, root, ctx), "failed to parse function");
         return 0;
     }
 
     if (current_token_code == TOK_VAR) {
-        CHECK(parse_declaration(parser, root), "failed to parse declaration");
+        CHECK(parse_declaration(parser, root, ctx), "failed to parse declaration");
         return 0;
     }
 
     if (current_token_code == TOK_CLS) {
-        CHECK(parse_class(parser, root), "failed to parse class");
+        CHECK(parse_class(parser, root, ctx), "failed to parse class");
         return 0;
     }
 
     if (current_token_code == TOK_RET) {
-        CHECK(parse_return(parser, root), "failed to parse return");
+        CHECK(parse_return(parser, root, ctx), "failed to parse return");
         return 0;
     }
 
-    CHECK(parse_expression_statement(parser, root), "failed to parse expression statement");
+    CHECK(parse_expression_statement(parser, root, ctx), "failed to parse expression statement");
     return 0;
 }
 
-static int parse_block(struct parser* parser, struct node** root, bool brackets) {
+static int parse_block(struct parser* parser, struct node** root, struct context* ctx, bool brackets) {
     const struct token* current_token = get_token();
 
     if (brackets) {
@@ -633,7 +648,7 @@ static int parse_block(struct parser* parser, struct node** root, bool brackets)
     struct node* statements = NULL;
     while (current_token->code != TOK_RBR && current_token->code != TOK_EOF) {
         struct node* statement;
-        CHECK(parse_statement(parser, &statement), "failed to parse statement");
+        CHECK(parse_statement(parser, &statement, ctx), "failed to parse statement");
 
         statements = node_new(NODE_STATEMENT, NULL, statement, statements);
         CHECK_NODE(statements);
@@ -656,6 +671,7 @@ static int parse_block(struct parser* parser, struct node** root, bool brackets)
 }
 
 int parse(struct parser* parser, struct node** root) {
-    CHECK(parse_block(parser, root, false), "failed to parse block");
+    struct context ctx;
+    CHECK(parse_block(parser, root, &ctx, false), "failed to parse block");
     return 0;
 }

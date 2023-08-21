@@ -109,7 +109,6 @@ const char* rev_objects[] = {
     "OBJ_BOOL",
     "OBJ_USER",
     "OBJ_FUNCTION",
-    "OBJ_METHOD",
     "OBJ_INSTANCE",
     "OBJ_CLASS"
 };

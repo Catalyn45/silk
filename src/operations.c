@@ -10,7 +10,7 @@
 static int add_strings(struct vm* vm, struct object* op1, struct object* op2, struct object* result) {
     EXPECT_OBJECT(op2->type, OBJ_STRING);
 
-    char* new_string = gc_alloc(vm, 500);
+    char* new_string = gc_alloc(vm, OBJ_STRING, 500);
     CHECK_MEM(new_string);
 
     uint32_t n_new_string = 0;
@@ -87,24 +87,28 @@ static void call(struct vm* vm, int32_t index, uint32_t n_args) {
 static int call_class(struct vm* vm, struct object* callable, int32_t n_args) {
     gc_clean(vm);
 
-    struct object_instance* value = gc_alloc(vm, sizeof(*value));
+    struct object_class* cls = callable->obj_value;
+
+    struct object_instance* value = gc_alloc(vm, OBJ_INSTANCE, sizeof(*value));
     CHECK_MEM(value);
+
+    *value = (struct object_instance) {
+        .cls = cls
+    };
 
     struct object o = (struct object) {
         .type = OBJ_INSTANCE,
-        .instance_value = value
+        .obj_value = value
     };
 
-    struct object_class* cls = callable->class_value;
+    struct object_function* constructor = NULL;
+    if (cls->constructor >= 0) {
+        constructor = &cls->methods[cls->constructor].function;
+    }
 
     if (cls->type == BUILT_IN) {
-        *value = (struct object_instance) {
-            .type = BUILT_IN,
-            .buintin_index = &vm->builtin_classes[cls->index]
-        };
-
-        if (vm->builtin_classes[cls->index].constructor) {
-            vm->builtin_classes[cls->index].constructor(o, vm);
+        if (constructor) {
+            constructor->function(&o, vm);
         }
 
         pop_args(n_args);
@@ -113,19 +117,14 @@ static int call_class(struct vm* vm, struct object* callable, int32_t n_args) {
     }
 
     if (cls->type == USER) {
-        *value = (struct object_instance) {
-            .type = USER,
-            .class_index = cls
-        };
-
-        if(cls->constructor >= 0) {
+        if(constructor) {
             push(o);
-            call(vm, cls->constructor, n_args + 1);
-        } else {
-            pop_args(n_args);
-            push(o);
+            call(vm, constructor->index, n_args + 1);
+            return 0;
         }
 
+        pop_args(n_args);
+        push(o);
         return 0;
     }
 
@@ -133,52 +132,89 @@ static int call_class(struct vm* vm, struct object* callable, int32_t n_args) {
     return 1;
 }
 
-static int call_method(struct vm* vm, struct object* callable, int32_t n_args) {
-    if (callable->method_value->type == USER) {
-        push(callable->method_value->context);
-        call(vm, callable->method_value->index, n_args + 1);
-
-        return 0;
-    }
-
-    if (callable->method_value->type == BUILT_IN) {
-        struct object* instance = &callable->method_value->context;
-        struct class_* cls = instance->instance_value->buintin_index;
-        struct method* method = &cls->methods[callable->method_value->index];
-
-        struct object result = method->method(*instance, vm);
-        pop_args(n_args);
-
-        push(result);
-
-        return 0;
-    }
-
-    ERROR("method of type: %d unknown", callable->method_value->type);
-    return 1;
-}
-
 static int call_function(struct vm* vm, struct object* callable, int32_t n_args) {
-    if (callable->function_value->type == USER) {
-        call(vm, callable->function_value->index, n_args);
+    struct object_function* function_value = callable->obj_value;
 
+    if (function_value->type == USER) {
+        push(function_value->context);
+        call(vm, function_value->index, n_args + 1);
         return 0;
     }
 
-    if (callable->function_value->type == BUILT_IN) {
-        struct object result = vm->builtin_functions[callable->function_value->index].fun(vm);
+    if (function_value->type == BUILT_IN) {
+        struct object result = function_value->function(&function_value->context, vm);
+
         pop_args(n_args);
-        push(result);
 
+        push(result);
         return 0;
     }
 
-    ERROR("function of type: %d unknown", callable->function_value->type);
+    ERROR("function of type: %d unknown", function_value->type);
     return 1;
 }
 
 call_fun callable_table[OBJ_COUNT] = {
     [OBJ_CLASS] = call_class,
     [OBJ_FUNCTION] = call_function,
-    [OBJ_METHOD] = call_method
+};
+
+static int get_instance(struct vm* vm, struct object* instance, const char* field_name) {
+    struct object_instance* instance_value = instance->obj_value;
+    struct object_class* cls = instance_value->cls;
+
+    uint32_t i;
+    for (i = 0; i < cls->n_members; ++i) {
+        if (cls->members[i] && strcmp(cls->members[i], field_name) == 0) {
+            push(instance_value->members[i]);
+            return 0;
+        }
+    }
+
+    for (i = 0; i < cls->n_methods; ++i) {
+        if (strcmp(cls->methods[i].name, field_name) == 0) {
+            struct object_function method = cls->methods[i].function;
+
+            struct object_function* fun = gc_alloc(vm, OBJ_FUNCTION, sizeof(*fun));
+            CHECK_MEM(fun);
+
+            *fun = method;
+            fun->context = *instance;
+
+            struct object to_push = {
+                .type = OBJ_FUNCTION,
+                .obj_value = fun
+            };
+
+            push(to_push);
+            return 0;
+        }
+    }
+
+    ERROR("attribute: %s does not exist in class", field_name);
+    return 1;
+}
+
+field_fun get_table[OBJ_COUNT] = {
+    [OBJ_INSTANCE] = get_instance
+};
+
+static int set_instance(struct vm* vm, struct object* instance, const char* field_name) {
+    struct object_instance* instance_value = instance->obj_value;
+    struct object_class* cls = instance_value->cls;
+
+    uint32_t i;
+    for (i = 0; i < cls->n_members; ++i) {
+        if (strcmp(cls->members[i], field_name) == 0) {
+            instance_value->members[i] = pop();
+            return 0;
+        }
+    }
+
+    ERROR("property: %s does not exist in class", field_name);
+    return 1;
+}
+
+field_fun set_table[OBJ_COUNT] = {
+    [OBJ_INSTANCE] = set_instance
 };

@@ -36,7 +36,8 @@ enum node_type {
 
 enum NODE_FLAGS {
     LVALUE   = (0x1 << 0),
-    CALLABLE = (0x1 << 1)
+    CALLABLE = (0x1 << 1),
+    LEFT     = (0x1 << 2)
 };
 
 struct parser {

@@ -5,7 +5,7 @@
 #include "objects.h"
 #include "vm.h"
 
-void* gc_alloc(struct vm* vm, size_t size) {
+void* gc_alloc(struct vm* vm, int32_t type, size_t size) {
     void* item = malloc(size);
     if (!item)
         return NULL;
@@ -13,6 +13,7 @@ void* gc_alloc(struct vm* vm, size_t size) {
     struct gc* gc = &vm->gc;
 
     gc->pool[gc->n_items++] = (struct gc_item){
+        .type = type,
         .marked = false,
         .memory = item
     };
@@ -29,53 +30,36 @@ static struct gc_item* get_item(struct gc* gc, void* item) {
     return NULL;
 }
 
+static void mark_item(struct gc* gc, struct object* obj);
+
+static void mark_item_cb(struct object* o, void* ctx) {
+    struct gc* gc = ctx;
+    mark_item(gc, o);
+}
+
 static void mark_item(struct gc* gc, struct object* obj) {
+    struct gc_item* item = get_item(gc, obj->obj_value);
+    if (!item)
+        return;
+
+    if (item->marked)
+        return;
+
+    item->marked = true;
     switch (obj->type) {
         case OBJ_INSTANCE:
             {
-                struct object_instance* instance = obj->instance_value;
-                struct gc_item* item = get_item(gc, instance);
-                if (item->marked)
-                    break;
+                struct object_instance* instance = item->memory;
+                struct object_class* cls = instance->cls;
 
-                if (instance->context) {
-                    struct gc_item* context_item = get_item(gc, instance->context);
-                    context_item->marked = true;
+                for (uint32_t i = 0; i < cls->n_members; ++i) {
+                    mark_item(gc, &instance->members[i]);
                 }
 
-                item->marked = true;
-                if (instance->type == USER) {
-                    for (uint32_t i = 0; i < instance->class_index->n_members; ++i) {
-                        mark_item(gc, &instance->members[i]);
-                    }
-                } else if (instance->type == BUILT_IN) {
-                    for (uint32_t i = 0; i < instance->buintin_index->n_members; ++i) {
-                        mark_item(gc, &instance->members[i]);
-                    }
-                }
-            }
-            break;
-
-        case OBJ_USER:
-            {
-                if (obj->user_value) {
-                    struct gc_item* item = get_item(gc, obj->user_value);
-
-                    item->marked = true;
-                }
-            }
-            break;
-
-        case OBJ_STRING:
-            {
-                struct gc_item* item = get_item(gc, obj->user_value);
-                if (!item) {
-                    // strings can be constants so they are not
-                    // dinamically allocated
-                    break;
+                if (cls->iterate_fun) {
+                    cls->iterate_fun(instance, mark_item_cb, gc);
                 }
 
-                item->marked = true;
             }
             break;
     }
@@ -91,12 +75,18 @@ void gc_clean(struct vm* vm) {
     }
 
     uint32_t i = 0;
-
     while (i < gc->n_items) {
         while (i < gc->n_items && !gc->pool[i].marked) {
             printf("deleting memory\n");
-            free(gc->pool[i].memory);
-            gc->pool[i] = gc->pool[--gc->n_items];
+
+            struct gc_item* item = &gc->pool[i];
+            if (item->type == OBJ_USER) {
+                struct object_user* user = item->memory;
+                user->free_fun(user->mem);
+            }
+
+            free(item->memory);
+            *item = gc->pool[--gc->n_items];
         }
 
         if (i < gc->n_items) {

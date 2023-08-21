@@ -1,8 +1,7 @@
 #ifndef FUNCTIONS_H_
 #define FUNCTIONS_H_
 
-#include "../compiler.h"
-
+struct evaluator;
 int add_builtin_functions(struct evaluator* e);
 
 #endif
