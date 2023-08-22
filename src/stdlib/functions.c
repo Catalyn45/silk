@@ -84,12 +84,12 @@ static struct object input_string(struct object* self, struct vm* vm) {
     return (struct object){.type = OBJ_STRING, .str_value = string};
 }
 
-int add_builtin_functions(struct evaluator* e) {
-    e->functions[e->n_functions++] = (struct named_function){.name = "print", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = print_object}};
-    e->functions[e->n_functions++] = (struct named_function){.name = "input_number", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = input_number}};
-    e->functions[e->n_functions++] = (struct named_function){.name = "input_string", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = input_string}};
-    e->functions[e->n_functions++] = (struct named_function){.name = "str", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = to_string}};
-    e->functions[e->n_functions++] = (struct named_function){.name = "int", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = to_int}};
+int add_builtin_functions(struct compiler_data* cd) {
+    cd->functions[cd->n_functions++] = (struct named_function){.name = "print", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = print_object}};
+    cd->functions[cd->n_functions++] = (struct named_function){.name = "input_number", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = input_number}};
+    cd->functions[cd->n_functions++] = (struct named_function){.name = "input_string", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = input_string}};
+    cd->functions[cd->n_functions++] = (struct named_function){.name = "str", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = to_string}};
+    cd->functions[cd->n_functions++] = (struct named_function){.name = "int", (struct object_function){.type = BUILT_IN, .n_parameters = 1, .function = to_int}};
 
     return 0;
 };

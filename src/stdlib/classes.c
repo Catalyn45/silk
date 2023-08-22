@@ -110,7 +110,7 @@ static struct object list_get(struct object* self, struct vm* vm) {
     return context->container[index];
 }
 
-int add_builtin_classes(struct evaluator* e) {
+int add_builtin_classes(struct compiler_data* e) {
     struct named_class list = {
         .name = "list",
         .cls = (struct object_class) {

@@ -38,7 +38,9 @@ enum token_codes {
     TOK_FAL = 31,
     TOK_DOT = 32,
     TOK_VAR = 33,
-    TOK_CLS = 34
+    TOK_CLS = 34,
+    TOK_CON = 35,
+    TOK_EXP = 36
 };
 
 struct token {

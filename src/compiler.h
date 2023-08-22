@@ -14,9 +14,10 @@ struct var {
     void* value;
     uint32_t scope;
     int32_t stack_index;
+    bool constant;
 };
 
-struct evaluator {
+struct compiler_data {
     struct named_function functions[1024];
     uint32_t n_functions;
 
@@ -38,6 +39,6 @@ struct binary_data {
     uint32_t n_program_bytes;
 };
 
-int evaluate(struct evaluator* e, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope, void* ctx);
+int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope, void* ctx);
 
 #endif

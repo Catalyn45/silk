@@ -112,14 +112,14 @@ int main(int argc, char* argv[]) {
         puts("");
     }
 
-    struct evaluator e = {};
+    struct compiler_data cd = {};
     struct binary_data d = {.n_constants_bytes = sizeof(int32_t)};
     uint32_t current_stack_index = 0;
 
-    add_builtin_functions(&e);
-    add_builtin_classes(&e);
+    add_builtin_functions(&cd);
+    add_builtin_classes(&cd);
 
-    if (evaluate(&e, ast, &d, &current_stack_index, 0, -1, NULL) != 0) {
+    if (compile(&cd, ast, &d, &current_stack_index, 0, -1, NULL) != 0) {
         ERROR("failed to evaluate");
         return 1;
     }
@@ -146,8 +146,8 @@ int main(int argc, char* argv[]) {
             .bytes = bytecode,
             .n_bytes = n_bytecodes,
             .start_address = start_address,
-            .builtin_functions = e.functions,
-            .builtin_classes = e.classes
+            .builtin_functions = cd.functions,
+            .builtin_classes = cd.classes
         };
 
         if (execute(&vm) != 0) {

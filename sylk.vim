@@ -11,13 +11,13 @@ syn region SylkComment start="#" end="$"
 syn match SylkNumber '\d\+' display
 syn match SylkNumber '[-]\d\+' display
 
-syn keyword SylkDeclarations var class nextgroup=SylkIdentifier skipwhite
+syn keyword SylkDeclarations var class const nextgroup=SylkIdentifier skipwhite
 syn keyword SylkDeclarations def nextgroup=SylkFunction skipwhite
 
 syn keyword SylkConditionals if else
 syn keyword SylkRepeats while
 syn keyword SylkSpecial self
-syn keyword SylkKeywords return
+syn keyword SylkKeywords return export
 
 syn keyword SylkBools true false
 

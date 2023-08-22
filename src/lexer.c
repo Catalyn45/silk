@@ -102,7 +102,9 @@ static bool check_keyword(const char* text, int* out_token_code) {
         {.name = "true",   .token = TOK_TRU},
         {.name = "false",  .token = TOK_FAL},
         {.name = "var",    .token = TOK_VAR},
-        {.name = "class",  .token = TOK_CLS}
+        {.name = "class",  .token = TOK_CLS},
+        {.name = "const",  .token = TOK_CON},
+        {.name = "export", .token = TOK_EXP},
     };
 
     for (unsigned int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); ++i) {

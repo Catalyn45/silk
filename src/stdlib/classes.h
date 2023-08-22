@@ -3,6 +3,6 @@
 
 #include "../compiler.h"
 
-int add_builtin_classes(struct evaluator* e);
+int add_builtin_classes(struct compiler_data* e);
 
 #endif

@@ -26,21 +26,9 @@ struct context {
 
 static int parse_expression(struct parser* parser, struct node** root, struct context* ctx);
 
-static int parse_primary(struct parser* parser, struct node** root, struct context* ctx) {
+static int parse_literal(struct parser* parser, struct node** root, struct context* ctx) {
+    (void)ctx;
     const struct token* current_token = get_token();
-
-    if (current_token->code == TOK_LPR) {
-        advance();
-
-        CHECK(parse_expression(parser, root, ctx), "failed to parse expression");
-
-        current_token = get_token();
-
-        EXPECT_TOKEN(current_token->code, TOK_RPR);
-        advance();
-
-        return 0;
-    }
 
     if (current_token->code == TOK_INT) {
         advance();
@@ -72,6 +60,27 @@ static int parse_primary(struct parser* parser, struct node** root, struct conte
         return 0;
     }
 
+    ERROR("unexpected token %s", rev_tokens[current_token->code]);
+    return 1;
+}
+
+static int parse_primary(struct parser* parser, struct node** root, struct context* ctx) {
+    const struct token* current_token = get_token();
+
+    if (current_token->code == TOK_LPR) {
+        advance();
+
+        CHECK(parse_expression(parser, root, ctx), "failed to parse expression");
+
+        current_token = get_token();
+
+        EXPECT_TOKEN(current_token->code, TOK_RPR);
+        advance();
+
+        return 0;
+    }
+
+
     if (current_token->code == TOK_IDN) {
         advance();
         struct node* node_var = node_new(NODE_VAR, current_token, NULL, NULL);
@@ -82,8 +91,8 @@ static int parse_primary(struct parser* parser, struct node** root, struct conte
         return 0;
     }
 
-    ERROR("unexpected token %s", rev_tokens[current_token->code]);
-    return 1;
+    CHECK(parse_literal(parser, root, ctx), "failed to parse literal");
+    return 0;
 }
 
 static int parse_argument_list(struct parser* parser, struct node** root, struct context* ctx) {
@@ -475,6 +484,42 @@ static int parse_parameter_list(struct parser* parser, struct node** root, struc
     return 0;
 }
 
+static int parse_class(struct parser* parser, struct node** root, struct context* ctx);
+static int parse_function(struct parser* parser, struct node** root, struct context* ctx);
+static int parse_constant(struct parser* parser, struct node** root, struct context* ctx);
+
+static int parse_export(struct parser* parser, struct node** root, struct context* ctx) {
+    const struct token* current_token = get_token();
+
+    EXPECT_TOKEN(current_token->code, TOK_EXP);
+    advance();
+
+    struct node* export_value = NULL;
+    current_token = get_token();
+
+    // if (current_token->code == TOK_LBR) {
+    //     CHECK(parse_block(parser, &export_value, ctx, true), "failed to parse block");
+    //     return 0;
+    // }
+
+    if (current_token->code == TOK_CLS) {
+        CHECK(parse_class(parser, &export_value, ctx), "failed to parse class");
+    } else if (current_token->code == TOK_FUN) {
+        CHECK(parse_function(parser, &export_value, ctx), "failed to parse function");
+    } else if (current_token->code == TOK_CON) {
+        CHECK(parse_constant(parser, &export_value, ctx), "failed to parse constant");
+    } else {
+        ERROR("can't use export before token: %s", rev_tokens[current_token->code]);
+        return 1;
+    }
+
+    struct node* export = node_new(NODE_EXPORT, NULL, export_value, NULL);
+    CHECK_NODE(export);
+
+    *root = export;
+    return 0;
+}
+
 static int parse_function(struct parser* parser, struct node** root, struct context* ctx) {
     const struct token* current_token = get_token();
 
@@ -600,6 +645,33 @@ static int parse_class(struct parser* parser, struct node** root, struct context
     return 0;
 }
 
+static int parse_constant(struct parser* parser, struct node** root, struct context* ctx) {
+    const struct token* current_token = get_token();
+
+    EXPECT_TOKEN(current_token->code, TOK_CON);
+    advance();
+
+    current_token = get_token();
+    EXPECT_TOKEN(current_token->code, TOK_IDN);
+    advance();
+
+    const struct token* identifier = current_token;
+
+    current_token = get_token();
+    struct node* const_value = NULL;
+    if (current_token->code == TOK_EQL) {
+        advance();
+        CHECK(parse_literal(parser, &const_value, ctx), "failed to parse literal");
+    }
+
+    struct node* declaration = node_new(NODE_CONSTANT, identifier, const_value, NULL);
+    CHECK_NODE(declaration);
+
+    *root = declaration;
+    return 0;
+
+    return 0;
+}
 static int parse_statement(struct parser* parser, struct node** root, struct context* ctx) {
     int current_token_code = get_token()->code;
 
@@ -620,6 +692,16 @@ static int parse_statement(struct parser* parser, struct node** root, struct con
 
     if (current_token_code == TOK_VAR) {
         CHECK(parse_declaration(parser, root, ctx), "failed to parse declaration");
+        return 0;
+    }
+
+    if (current_token_code == TOK_EXP) {
+        CHECK(parse_export(parser, root, ctx), "failed to parse export");
+        return 0;
+    }
+
+    if (current_token_code == TOK_CON) {
+        CHECK(parse_constant(parser, root, ctx), "failed to parse declaration");
         return 0;
     }
 

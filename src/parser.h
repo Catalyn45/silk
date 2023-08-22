@@ -31,7 +31,9 @@ enum node_type {
     NODE_MEMBER        = 21,
     NODE_CLASS         = 22,
     NODE_BLOCK         = 23,
-    NODE_METHOD        = 24
+    NODE_METHOD        = 24,
+    NODE_CONSTANT      = 25,
+    NODE_EXPORT        = 26
 };
 
 enum NODE_FLAGS {
