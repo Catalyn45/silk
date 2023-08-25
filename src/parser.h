@@ -44,11 +44,8 @@ enum NODE_FLAGS {
 };
 
 struct parser {
-    const char* text;
-    uint32_t current_index;
-
-    const struct token*  tokens;
-    uint32_t n_tokens;
+    struct token current_token;
+    struct lexer* l;
 };
 
 int parse(struct parser* parser, struct node** root );

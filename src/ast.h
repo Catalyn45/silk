@@ -2,10 +2,11 @@
 #define AST_H
 
 #include <stdint.h>
+#include "lexer.h"
 
 struct node {
     int type;
-    const struct token* token;
+    struct token token;
     struct node* left;
     struct node* right;
     uint32_t flags;

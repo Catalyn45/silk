@@ -10,10 +10,13 @@ struct node* node_new(int type, const struct token* token, struct node* left, st
 
     *n = (struct node) {
         .type = type,
-        .token = token,
         .left = left,
         .right = right,
     };
+
+    if (token) {
+        n->token = *token;
+    }
 
     return n;
 }

@@ -8,7 +8,38 @@
 #include "compiler.h"
 #include "objects.h"
 #include "instructions.h"
+#include "sylk_lib.h"
 #include "utils.h"
+
+struct var {
+    const char* name;
+    void* value;
+    uint32_t scope;
+    int32_t stack_index;
+    bool constant;
+};
+
+struct compiler_data {
+    struct named_function* functions;
+    uint32_t n_functions;
+
+    struct named_class* classes;
+    uint32_t n_classes;
+
+    struct var locals[1024];
+    uint32_t n_locals;
+};
+
+struct binary_data {
+    uint8_t constants_bytes[4048];
+    uint32_t n_constants_bytes;
+
+    uint8_t classes[4048];
+    uint32_t n_classes;
+
+    uint8_t program_bytes[4048];
+    uint32_t n_program_bytes;
+};
 
 static void add_variable(const char* var_name, uint32_t scope, uint32_t index, bool constant, struct compiler_data* e) {
     e->locals[e->n_locals++] = (struct var) {
@@ -135,18 +166,19 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
         memcpy(&data->program_bytes[placeholder], &data->n_program_bytes, sizeof(data->n_program_bytes)); \
     } \
 
+
+int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope, void* ctx);
 static int compile_lvalue(struct compiler_data* cd, struct node* ast, struct binary_data* data, uint32_t* current_stack_index, uint32_t function_scope, int32_t current_scope, void* ctx) {
     switch (ast->type) {
         case NODE_VAR:
             {
                 struct var* variable;
-                int res = get_variable(ast->token->value, cd, &variable);
-                if (variable->constant) {
-                    ERROR("can't change a constant");
-                    return 1;
-                }
-
+                int res = get_variable(ast->token.value, cd, &variable);
                 if (res == 0) {
+                    if (variable->constant) {
+                        ERROR("can't change a constant");
+                        return 1;
+                    }
                     // variable outside of function
                     if (variable->scope < function_scope) {
                         add_instruction(CHANGE);
@@ -166,7 +198,7 @@ static int compile_lvalue(struct compiler_data* cd, struct node* ast, struct bin
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile left member of member access");
 
                 int32_t out_address;
-                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value}, &out_address);
+                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token.value}, &out_address);
 
                 add_instruction(PUSH);
                 add_number(out_address);
@@ -211,7 +243,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 add_instruction(PUSH);
 
                 int32_t constant_address;
-                CHECK(add_constant(data, &(struct object){.type = OBJ_NUMBER, .num_value = *(int32_t*)ast->token->value}, &constant_address), "failed to add constant");
+                CHECK(add_constant(data, &(struct object){.type = OBJ_NUMBER, .num_value = *(int32_t*)ast->token.value}, &constant_address), "failed to add constant");
 
                 add_number(constant_address);
 
@@ -219,7 +251,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
             }
         case NODE_BOOL:
             {
-                if (ast->token->code == TOK_TRU) {
+                if (ast->token.code == TOK_TRU) {
                     add_instruction(PUSH_TRUE);
                 } else {
                     add_instruction(PUSH_FALSE);
@@ -232,7 +264,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 add_instruction(PUSH);
 
                 int32_t constant_address;
-                CHECK(add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value}, &constant_address), "failed to add constant");
+                CHECK(add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token.value}, &constant_address), "failed to add constant");
 
                 add_number(constant_address);
 
@@ -241,7 +273,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
         case NODE_VAR:
             {
                 struct var* variable;
-                int res = get_variable(ast->token->value, cd, &variable);
+                int res = get_variable(ast->token.value, cd, &variable);
                 if (res == 0) {
                     // variable outside of function
                     if (variable->scope < function_scope) {
@@ -255,7 +287,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                     return 0;
                 }
 
-                const char* name = ast->token->value;
+                const char* name = ast->token.value;
                 struct named_function* f = get_function(name, cd);
                 if (f) {
                     struct object o = {
@@ -294,7 +326,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
             CHECK(compile(cd, ast->right, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile binary operation");
             CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx),  "failed to compile binary operation");
 
-            switch (ast->token->code) {
+            switch (ast->token.code) {
                 case TOK_ADD:
                     add_instruction(ADD);
                     break;
@@ -401,7 +433,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
 
         case NODE_CONSTANT:
             {
-                const char* var_name = ast->token->value;
+                const char* var_name = ast->token.value;
                 add_variable(var_name, current_scope, *current_stack_index, true, cd);
                 increment_index();
 
@@ -415,7 +447,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
             }
         case NODE_DECLARATION:
             {
-                const char* var_name = ast->token->value;
+                const char* var_name = ast->token.value;
                 add_variable(var_name, current_scope, *current_stack_index, false, cd);
                 increment_index();
 
@@ -481,7 +513,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
 
         case NODE_CLASS:
             {
-                const char* class_name = ast->token->value;
+                const char* class_name = ast->token.value;
                 struct object cls = {
                     .type = OBJ_CLASS,
                     .obj_value = &(struct object_class) {
@@ -514,7 +546,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 compile(cd, ast->right, data, current_stack_index, function_scope, current_scope, ctx);
 
                 struct object_class* current_class = ctx;
-                current_class->members[current_class->n_members++] = ast->token->value;
+                current_class->members[current_class->n_members++] = ast->token.value;
 
                 return 0;
             }
@@ -541,7 +573,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 struct node* parameter = ast->left;
                 uint32_t n_parameters = 0;
                 while (parameter) {
-                    add_variable(parameter->token->value, current_scope + 1, new_stack_index++, false, cd);
+                    add_variable(parameter->token.value, current_scope + 1, new_stack_index++, false, cd);
                     parameter = parameter->right;
                     ++n_parameters;
                 }
@@ -552,7 +584,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 CHECK(compile(cd, ast->right, data, &new_stack_index, function_scope + 1, current_scope, ctx), "failed to compile function body");
 
                 current_class->methods[current_class->n_methods++] = (struct named_function){
-                    .name = ast->token->value,
+                    .name = ast->token.value,
                     .function = {
                         .type = USER,
                         .index = method_address,
@@ -560,7 +592,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                     }
                 };
 
-                if (strcmp(ast->token->value, "constructor") == 0) {
+                if (strcmp(ast->token.value, "constructor") == 0) {
                     current_class->constructor = current_class->n_methods - 1;
 
                     add_instruction(DUP_LOC);
@@ -585,7 +617,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                     ++n_parameters;
                 }
 
-                const char* fun_name = ast->token->value;
+                const char* fun_name = ast->token.value;
                 struct object o = {
                     .type = OBJ_FUNCTION,
                     .obj_value = &(struct object_function) {
@@ -611,7 +643,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 parameter = ast->left;
                 while (parameter) {
                     --n_parameters;
-                    add_variable(parameter->token->value, current_scope + 1, new_stack_index++, false, cd);
+                    add_variable(parameter->token.value, current_scope + 1, new_stack_index++, false, cd);
 
                     parameter = parameter->right;
                 }
@@ -657,7 +689,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile left member of member access");
 
                 int32_t out_address;
-                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token->value}, &out_address);
+                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token.value}, &out_address);
 
                 add_instruction(PUSH);
                 add_number(out_address);
@@ -705,7 +737,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
             }
         case NODE_EXP_STATEMENT:
             {
-                CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile return value");
+                CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile expression statement");
                 add_instruction(POP);
 
                 return 0;
@@ -718,3 +750,34 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
     return 0;
 }
 
+
+int compile_program(struct sylk* s, struct node* ast, uint8_t* bytecodes, size_t* out_n_bytecodes, uint32_t* out_start_address) {
+    struct compiler_data cd = {
+        .functions = s->builtin_functions,
+        .n_functions = s->n_builtin_functions,
+        .classes = s->builtin_classes,
+        .n_classes = s->n_builtin_classes
+    };
+
+    struct binary_data d = {};
+    uint32_t current_stack_index = 0;
+
+    if (compile(&cd, ast, &d, &current_stack_index, 0, -1, NULL) != 0) {
+        ERROR("failed to evaluate");
+        return 1;
+    }
+
+    size_t n_bytecodes = 0;
+    memcpy(bytecodes, d.constants_bytes, d.n_constants_bytes);
+    n_bytecodes += d.n_constants_bytes;
+
+    uint32_t start_address = n_bytecodes;
+
+    // program start address
+    memcpy(bytecodes + n_bytecodes, d.program_bytes, d.n_program_bytes);
+    n_bytecodes += d.n_program_bytes;
+
+    *out_n_bytecodes = n_bytecodes;
+    *out_start_address = start_address;
+    return 0;
+}

@@ -5,7 +5,7 @@
 #include "instructions.h"
 
 const char* rev_tokens[] = {
-    "int",       // TOK_INT, // integer (20)
+    [1] = "int",       // TOK_INT, // integer (20)
     "str",       // TOK_STR, // string ("example")
     "+",         // TOK_ADD, // add operator (+)
     "-",         // TOK_MIN, // minux operator (-)
@@ -159,12 +159,12 @@ void dump_ast(struct node* root, int indent) {
     printf("%s", rev_node[root->type]);
 
     if (root->type == NODE_NUMBER) {
-        printf("(%d)\n", *(int*)root->token->value);
-    } else if (root->token) {
-        if (root->token->value) {
-            printf("(%s)\n", (char*)root->token->value);
+        printf("(%d)\n", *(int*)root->token.value);
+    } else if (root->token.code != TOK_INV) {
+        if (root->token.value) {
+            printf("(%s)\n", (char*)root->token.value);
         } else {
-            printf("(%s)\n", rev_tokens[root->token->code]);
+            printf("(%s)\n", rev_tokens[root->token.code]);
         }
     } else {
         printf("\n");

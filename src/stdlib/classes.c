@@ -110,7 +110,7 @@ static struct object list_get(struct object* self, struct vm* vm) {
     return context->container[index];
 }
 
-int add_builtin_classes(struct compiler_data* e) {
+int add_builtin_classes(struct named_class* classes, size_t* n_classes){
     struct named_class list = {
         .name = "list",
         .cls = (struct object_class) {
@@ -167,7 +167,7 @@ int add_builtin_classes(struct compiler_data* e) {
         }
     };
 
-    e->classes[e->n_classes++] = list;
+    classes[(*n_classes)++] = list;
 
     return 0;
 }

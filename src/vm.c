@@ -112,7 +112,8 @@ static void ret(struct vm* vm) {
 #define read_value_increment(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
 
-int execute(struct vm* vm) {
+int execute(struct sylk* s, struct vm* vm){
+    (void) s;
     vm->program_counter = vm->start_address;
 
     // run gc at this number of allocated objects

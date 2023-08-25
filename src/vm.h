@@ -17,10 +17,6 @@
     (vm->stack[vm->stack_size - 1 - (n)])
 
 struct vm {
-    struct named_function* builtin_functions;
-    struct named_class* builtin_classes;
-
-    uint32_t globals[2048];
     struct object stack[2048];
 
     uint8_t* bytes;
@@ -37,6 +33,7 @@ struct vm {
     bool halt;
 };
 
-int execute(struct vm* vm);
+struct sylk;
+int execute(struct sylk* s, struct vm* vm);
 
 #endif
