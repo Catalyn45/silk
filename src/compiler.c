@@ -477,7 +477,6 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
             {
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile export");
                 return 0;
-
             }
 
         case NODE_CLASS:

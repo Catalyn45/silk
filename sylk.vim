@@ -17,7 +17,7 @@ syn keyword SylkDeclarations def nextgroup=SylkFunction skipwhite
 syn keyword SylkConditionals if else
 syn keyword SylkRepeats while
 syn keyword SylkSpecial self
-syn keyword SylkKeywords return export
+syn keyword SylkKeywords return export import
 
 syn keyword SylkBools true false
 

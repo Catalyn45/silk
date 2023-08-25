@@ -105,6 +105,7 @@ static bool check_keyword(const char* text, int* out_token_code) {
         {.name = "class",  .token = TOK_CLS},
         {.name = "const",  .token = TOK_CON},
         {.name = "export", .token = TOK_EXP},
+        {.name = "import", .token = TOK_IMP},
     };
 
     for (unsigned int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); ++i) {

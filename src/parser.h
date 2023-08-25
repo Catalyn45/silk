@@ -33,7 +33,8 @@ enum node_type {
     NODE_BLOCK         = 23,
     NODE_METHOD        = 24,
     NODE_CONSTANT      = 25,
-    NODE_EXPORT        = 26
+    NODE_EXPORT        = 26,
+    NODE_IMPORT        = 27
 };
 
 enum NODE_FLAGS {

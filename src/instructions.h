@@ -31,7 +31,8 @@ enum instructions {
     RET        = 26,
     PUSH_NUM   = 27,
     GET_FIELD  = 28,
-    SET_FIELD  = 29
+    SET_FIELD  = 29,
+    IMPORT     = 30
 };
 
 #endif

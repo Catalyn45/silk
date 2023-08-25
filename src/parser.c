@@ -1,11 +1,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "parser.h"
-#include "lexer.h"
 #include "ast.h"
 #include "utils.h"
+#include "lexer.h"
 
 #define get_token() \
     (&parser->tokens[parser->current_index])
@@ -672,6 +673,50 @@ static int parse_constant(struct parser* parser, struct node** root, struct cont
 
     return 0;
 }
+
+static int parse_import(struct parser* parser, struct node** root, struct context* ctx) {
+    (void) ctx;
+
+    const struct token* current_token = get_token();
+    EXPECT_TOKEN(current_token->code, TOK_IMP);
+    advance();
+
+    current_token = get_token();
+    EXPECT_TOKEN(current_token->code, TOK_STR);
+    advance();
+
+    const char* file_name = current_token->value;
+
+    FILE* f = fopen(file_name, "r");
+    CHECK_NULL(f, "failed to open file");
+
+    char text[2048];
+    size_t size = fread(text, sizeof(char), sizeof(text), f);
+    fclose(f);
+
+    text[size] = '\0';
+
+    struct token* tokens = NULL;
+    uint32_t n_tokens;
+
+    CHECK(tokenize(text, strlen(text), &tokens, &n_tokens), "failed to tokenize: %s", file_name);
+
+    struct parser new_parser = {
+        .text = text,
+        .tokens = tokens,
+        .n_tokens = n_tokens
+    };
+
+    struct node* block = NULL;
+    CHECK(parse(&new_parser, &block), "failed to parse module");
+
+    struct node* import_node = node_new(NODE_IMPORT, NULL, block, NULL);
+    CHECK_NODE(import_node);
+
+    *root = import_node;
+    return 0;
+}
+
 static int parse_statement(struct parser* parser, struct node** root, struct context* ctx) {
     int current_token_code = get_token()->code;
 
@@ -692,6 +737,11 @@ static int parse_statement(struct parser* parser, struct node** root, struct con
 
     if (current_token_code == TOK_VAR) {
         CHECK(parse_declaration(parser, root, ctx), "failed to parse declaration");
+        return 0;
+    }
+
+    if (current_token_code == TOK_IMP) {
+        CHECK(parse_import(parser, root, ctx), "failed to parse import");
         return 0;
     }
 
