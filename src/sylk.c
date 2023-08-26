@@ -11,6 +11,7 @@
 #include "vm.h"
 #include "utils.h"
 
+struct sylk_config default_config = {};
 
 struct sylk* sylk_new(const struct sylk_config* config, void* ctx) {
     struct sylk* s = malloc(sizeof(*s));
@@ -22,6 +23,10 @@ struct sylk* sylk_new(const struct sylk_config* config, void* ctx) {
         .config = config,
         .ctx = ctx
     };
+
+    if (config == NULL) {
+        s->config = &default_config;
+    }
 
     return s;
 }
