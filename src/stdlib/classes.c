@@ -60,7 +60,7 @@ static struct sylk_object list_add(struct sylk_object* self, struct sylk_vm* vm,
         context->allocated = new_alloc_size;
     }
 
-    context->container[context->n_elements++] = peek(0);
+    context->container[context->n_elements++] = pop();
     return (struct sylk_object){};
 }
 
@@ -102,8 +102,8 @@ static struct sylk_object list_set(struct sylk_object* self, struct sylk_vm* vm,
     struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
-    uint32_t index = peek(0).num_value;
-    context->container[index] = peek(1);
+    uint32_t index = pop().num_value;
+    context->container[index] = pop();
 
     return (struct sylk_object){};
 }
@@ -115,7 +115,7 @@ static struct sylk_object list_get(struct sylk_object* self, struct sylk_vm* vm,
     struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
-    uint32_t index = peek(0).num_value;
+    uint32_t index = pop().num_value;
     return context->container[index];
 }
 

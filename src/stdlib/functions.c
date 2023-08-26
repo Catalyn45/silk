@@ -10,7 +10,7 @@ static struct sylk_object print_object(struct sylk_object* self, struct sylk_vm*
     (void)self;
     (void)ctx;
 
-    struct sylk_object o = peek(0);
+    struct sylk_object o = pop();
 
     if (o.type == SYLK_OBJ_NUMBER) {
         printf("%d\n", o.num_value);
@@ -35,7 +35,7 @@ static struct sylk_object input_number(struct sylk_object* self, struct sylk_vm*
     (void)self;
     (void)ctx;
 
-    struct sylk_object o = peek(0);
+    struct sylk_object o = pop();
 
     const char* input_text = o.str_value;
     printf("%s", input_text);
@@ -54,7 +54,7 @@ static struct sylk_object to_string(struct sylk_object* self, struct sylk_vm* vm
 
     char* str = gc_alloc(vm, SYLK_OBJ_STRING, 200);
 
-    struct sylk_object num = peek(0);
+    struct sylk_object num = pop();
 
     sprintf(str, "%d", num.num_value);
     return (struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = str};
@@ -64,7 +64,7 @@ static struct sylk_object to_int(struct sylk_object* self, struct sylk_vm* vm, v
     (void)self;
     (void)ctx;
 
-    struct sylk_object str = peek(0);
+    struct sylk_object str = pop();
 
     char* end = NULL;
     int32_t num = strtol(str.str_value, &end, 10);
@@ -76,7 +76,7 @@ static struct sylk_object input_string(struct sylk_object* self, struct sylk_vm*
     (void)self;
     (void)ctx;
 
-    struct sylk_object o = peek(0);
+    struct sylk_object o = pop();
 
     const char* input_text = o.str_value;
     printf("%s", input_text);

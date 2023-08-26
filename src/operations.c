@@ -107,11 +107,14 @@ static int call_class(struct sylk_vm* vm, struct sylk_object* callable, int32_t 
     }
 
     if (cls->type == SYLK_BUILT_IN) {
+        size_t clean_stack_size = vm->stack_size - n_args - 2;
+
         if (constructor) {
             constructor->function(&o, vm, ctx);
         }
 
-        pop_args(n_args);
+        vm->stack_size = clean_stack_size;
+        // pop_args(n_args);
         push(o);
         return 0;
     }
@@ -142,10 +145,12 @@ static int call_function(struct sylk_vm* vm, struct sylk_object* callable, int32
     }
 
     if (function_value->type == SYLK_BUILT_IN) {
+        size_t clean_stack_size = vm->stack_size - n_args - 2;
         struct sylk_object result = function_value->function(&function_value->context, vm, ctx);
 
-        pop_args(n_args);
+        // pop_args(n_args);
 
+        vm->stack_size = clean_stack_size;
         push(result);
         return 0;
     }

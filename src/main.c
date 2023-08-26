@@ -18,20 +18,6 @@
     printf("\t-h          : not execute the program\n"); \
 }
 
-struct my_ctx {
-    const char* text;
-};
-
-static struct sylk_object test_fun(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
-    (void) self;
-    (void) vm;
-
-    struct my_ctx* mctx = ctx;
-
-    printf("%s\n", mctx->text);
-    return (struct sylk_object){};
-}
-
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         print_help();
@@ -82,32 +68,9 @@ int main(int argc, char* argv[]) {
         .halt_program = halt_program
     };
 
-    struct my_ctx ctx = {
-        .text = "hello world"
-    };
-
-    struct sylk* s = sylk_new(&config, &ctx);
+    struct sylk* s = sylk_new(&config, NULL);
 
     sylk_load_prelude(s);
-
-    struct sylk_function functions[] = {
-        {"test", test_fun, 0},
-        {NULL, NULL, 0}
-    };
-
-    sylk_load_functions(s, functions);
-
-    const char* members[] = {
-        NULL
-    };
-
-    struct sylk_class classes[] = {
-        {"Test", members, functions},
-        {NULL, NULL, NULL}
-    };
-
-    sylk_load_classes(s, classes);
-
     CHECK(sylk_run_file(s, argv[1]), "failed to run file");
     sylk_free(s);
 }

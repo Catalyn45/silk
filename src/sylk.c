@@ -133,6 +133,10 @@ int sylk_load_classes(struct sylk* s, struct sylk_class* classes) {
 
         j = 0;
         while (classes[i].methods[j].name && classes[i].methods[j].function) {
+            if (strcmp(classes[i].methods[j].name, "constructor") == 0) {
+                obj_cls->constructor = j;
+            }
+
             obj_cls->methods[obj_cls->n_methods++] = (struct sylk_named_function) {
                 .name = classes[i].methods[j].name,
                 .function = (struct sylk_object_function) {
