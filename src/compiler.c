@@ -20,10 +20,10 @@ struct var {
 };
 
 struct compiler_data {
-    struct named_function* functions;
+    struct sylk_named_function* functions;
     uint32_t n_functions;
 
-    struct named_class* classes;
+    struct sylk_named_class* classes;
     uint32_t n_classes;
 
     struct var locals[1024];
@@ -78,7 +78,7 @@ static uint32_t pop_variables(uint32_t scope, struct compiler_data* e) {
     return count;
 }
 
-static struct named_function* get_function(const char* function_name, struct compiler_data* e) {
+static struct sylk_named_function* get_function(const char* function_name, struct compiler_data* e) {
     for (uint i = 0; i < e->n_functions; ++i) {
         if (strcmp(e->functions[i].name, function_name) == 0) {
             return &e->functions[i];
@@ -88,7 +88,7 @@ static struct named_function* get_function(const char* function_name, struct com
     return NULL;
 }
 
-static struct named_class* get_class(const char* class_name, struct compiler_data* e) {
+static struct sylk_named_class* get_class(const char* class_name, struct compiler_data* e) {
     for (uint i = 0; i < e->n_classes; ++i) {
         if (strcmp(e->classes[i].name, class_name) == 0) {
             return &e->classes[i];
@@ -98,13 +98,13 @@ static struct named_class* get_class(const char* class_name, struct compiler_dat
     return NULL;
 }
 
-static int32_t add_constant(struct binary_data* data, const struct object* o, int32_t* out_address) {
+static int32_t add_constant(struct binary_data* data, const struct sylk_object* o, int32_t* out_address) {
     uint32_t constant_address = data->n_constants_bytes;
 
     *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->type;
     data->n_constants_bytes += sizeof(int32_t);
 
-    if (o->type == OBJ_NUMBER) {
+    if (o->type == SYLK_OBJ_NUMBER) {
         *(int32_t*)(&data->constants_bytes[data->n_constants_bytes]) = o->num_value;
         data->n_constants_bytes += sizeof(int32_t);
 
@@ -112,7 +112,7 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
         return 0;
     }
 
-    if (o->type == OBJ_STRING) {
+    if (o->type == SYLK_OBJ_STRING) {
         strcpy((char*)&data->constants_bytes[data->n_constants_bytes], o->str_value);
         data->n_constants_bytes += strlen(o->str_value);
 
@@ -123,17 +123,17 @@ static int32_t add_constant(struct binary_data* data, const struct object* o, in
         return 0;
     }
 
-    if (o->type == OBJ_FUNCTION) {
-        *(struct object_function*)(&data->constants_bytes[data->n_constants_bytes]) = *(struct object_function*)o->obj_value;
-        data->n_constants_bytes += sizeof(struct object_function);
+    if (o->type == SYLK_OBJ_FUNCTION) {
+        *(struct sylk_object_function*)(&data->constants_bytes[data->n_constants_bytes]) = *(struct sylk_object_function*)o->obj_value;
+        data->n_constants_bytes += sizeof(struct sylk_object_function);
 
         *out_address = constant_address;
         return 0;
     }
 
-    if (o->type == OBJ_CLASS) {
-        *(struct object_class*)(&data->constants_bytes[data->n_constants_bytes]) = *(struct object_class*)o->obj_value;
-        data->n_constants_bytes += sizeof(struct object_class);
+    if (o->type == SYLK_OBJ_CLASS) {
+        *(struct sylk_object_class*)(&data->constants_bytes[data->n_constants_bytes]) = *(struct sylk_object_class*)o->obj_value;
+        data->n_constants_bytes += sizeof(struct sylk_object_class);
 
         *out_address = constant_address;
         return 0;
@@ -198,7 +198,7 @@ static int compile_lvalue(struct compiler_data* cd, struct node* ast, struct bin
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile left member of member access");
 
                 int32_t out_address;
-                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token.value}, &out_address);
+                add_constant(data, &(struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = ast->token.value}, &out_address);
 
                 add_instruction(PUSH);
                 add_number(out_address);
@@ -214,7 +214,7 @@ static int compile_lvalue(struct compiler_data* cd, struct node* ast, struct bin
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile left member of member index");
 
                 int32_t out_address;
-                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = "__set"}, &out_address);
+                add_constant(data, &(struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = "__set"}, &out_address);
                 add_instruction(PUSH)
                 add_number(out_address);
 
@@ -243,7 +243,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 add_instruction(PUSH);
 
                 int32_t constant_address;
-                CHECK(add_constant(data, &(struct object){.type = OBJ_NUMBER, .num_value = *(int32_t*)ast->token.value}, &constant_address), "failed to add constant");
+                CHECK(add_constant(data, &(struct sylk_object){.type = SYLK_OBJ_NUMBER, .num_value = *(int32_t*)ast->token.value}, &constant_address), "failed to add constant");
 
                 add_number(constant_address);
 
@@ -264,7 +264,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 add_instruction(PUSH);
 
                 int32_t constant_address;
-                CHECK(add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token.value}, &constant_address), "failed to add constant");
+                CHECK(add_constant(data, &(struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = ast->token.value}, &constant_address), "failed to add constant");
 
                 add_number(constant_address);
 
@@ -288,10 +288,10 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 }
 
                 const char* name = ast->token.value;
-                struct named_function* f = get_function(name, cd);
+                struct sylk_named_function* f = get_function(name, cd);
                 if (f) {
-                    struct object o = {
-                        .type = OBJ_FUNCTION,
+                    struct sylk_object o = {
+                        .type = SYLK_OBJ_FUNCTION,
                         .obj_value = &f->function
                     };
 
@@ -304,10 +304,10 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                     return 0;
                 }
 
-                struct named_class* c = get_class(name, cd);
+                struct sylk_named_class* c = get_class(name, cd);
                 if (c) {
-                    struct object o = {
-                        .type = OBJ_CLASS,
+                    struct sylk_object o = {
+                        .type = SYLK_OBJ_CLASS,
                         .obj_value = &c->cls
                     };
 
@@ -514,10 +514,10 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
         case NODE_CLASS:
             {
                 const char* class_name = ast->token.value;
-                struct object cls = {
-                    .type = OBJ_CLASS,
-                    .obj_value = &(struct object_class) {
-                        .type = USER,
+                struct sylk_object cls = {
+                    .type = SYLK_OBJ_CLASS,
+                    .obj_value = &(struct sylk_object_class) {
+                        .type = SYLK_USER,
                         .constructor = -1,
                         .index = data->n_program_bytes,
                     }
@@ -545,7 +545,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
             {
                 compile(cd, ast->right, data, current_stack_index, function_scope, current_scope, ctx);
 
-                struct object_class* current_class = ctx;
+                struct sylk_object_class* current_class = ctx;
                 current_class->members[current_class->n_members++] = ast->token.value;
 
                 return 0;
@@ -564,7 +564,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 add_instruction(JMP);
                 uint32_t placeholder = create_placeholder();
 
-                struct object_class* current_class = ctx;
+                struct sylk_object_class* current_class = ctx;
 
                 int32_t method_address = data->n_program_bytes;
 
@@ -583,10 +583,10 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
 
                 CHECK(compile(cd, ast->right, data, &new_stack_index, function_scope + 1, current_scope, ctx), "failed to compile function body");
 
-                current_class->methods[current_class->n_methods++] = (struct named_function){
+                current_class->methods[current_class->n_methods++] = (struct sylk_named_function){
                     .name = ast->token.value,
                     .function = {
-                        .type = USER,
+                        .type = SYLK_USER,
                         .index = method_address,
                         .n_parameters = n_parameters
                     }
@@ -618,10 +618,10 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 }
 
                 const char* fun_name = ast->token.value;
-                struct object o = {
-                    .type = OBJ_FUNCTION,
-                    .obj_value = &(struct object_function) {
-                        .type = USER,
+                struct sylk_object o = {
+                    .type = SYLK_OBJ_FUNCTION,
+                    .obj_value = &(struct sylk_object_function) {
+                        .type = SYLK_USER,
                         .n_parameters = n_parameters,
                         .index = data->n_program_bytes + sizeof(int32_t) + sizeof(int32_t) + 2
                    }
@@ -689,7 +689,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile left member of member access");
 
                 int32_t out_address;
-                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = ast->token.value}, &out_address);
+                add_constant(data, &(struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = ast->token.value}, &out_address);
 
                 add_instruction(PUSH);
                 add_number(out_address);
@@ -710,7 +710,7 @@ int compile(struct compiler_data* cd, struct node* ast, struct binary_data* data
                 CHECK(compile(cd, ast->left, data, current_stack_index, function_scope, current_scope, ctx), "failed to compile left member of member index");
 
                 int32_t out_address;
-                add_constant(data, &(struct object){.type = OBJ_STRING, .str_value = "__get"}, &out_address);
+                add_constant(data, &(struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = "__get"}, &out_address);
                 add_instruction(PUSH)
                 add_number(out_address);
 

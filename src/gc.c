@@ -5,7 +5,7 @@
 #include "objects.h"
 #include "vm.h"
 
-void* gc_alloc(struct vm* vm, int32_t type, size_t size) {
+void* gc_alloc(struct sylk_vm* vm, int32_t type, size_t size) {
     void* item = malloc(size);
     if (!item)
         return NULL;
@@ -30,14 +30,14 @@ static struct gc_item* get_item(struct gc* gc, void* item) {
     return NULL;
 }
 
-static void mark_item(struct gc* gc, struct object* obj);
+static void mark_item(struct gc* gc, struct sylk_object* obj);
 
-static void mark_item_cb(struct object* o, void* ctx) {
+static void mark_item_cb(struct sylk_object* o, void* ctx) {
     struct gc* gc = ctx;
     mark_item(gc, o);
 }
 
-static void mark_item(struct gc* gc, struct object* obj) {
+static void mark_item(struct gc* gc, struct sylk_object* obj) {
     struct gc_item* item = get_item(gc, obj->obj_value);
     if (!item)
         return;
@@ -47,10 +47,10 @@ static void mark_item(struct gc* gc, struct object* obj) {
 
     item->marked = true;
     switch (obj->type) {
-        case OBJ_INSTANCE:
+        case SYLK_OBJ_INSTANCE:
             {
-                struct object_instance* instance = item->memory;
-                struct object_class* cls = instance->cls;
+                struct sylk_object_instance* instance = item->memory;
+                struct sylk_object_class* cls = instance->cls;
 
                 for (uint32_t i = 0; i < cls->n_members; ++i) {
                     mark_item(gc, &instance->members[i]);
@@ -65,7 +65,7 @@ static void mark_item(struct gc* gc, struct object* obj) {
     }
 }
 
-void gc_clean(struct vm* vm) {
+void gc_clean(struct sylk_vm* vm) {
     struct gc* gc = &vm->gc;
     if (gc->n_items < gc->treshold)
         return;
@@ -80,8 +80,8 @@ void gc_clean(struct vm* vm) {
             printf("deleting memory\n");
 
             struct gc_item* item = &gc->pool[i];
-            if (item->type == OBJ_USER) {
-                struct object_user* user = item->memory;
+            if (item->type == SYLK_OBJ_USER) {
+                struct sylk_object_user* user = item->memory;
                 user->free_fun(user->mem);
             }
 

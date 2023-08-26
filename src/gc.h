@@ -16,9 +16,9 @@ struct gc {
     size_t treshold;
 };
 
-struct vm;
+struct sylk_vm;
 
-void* gc_alloc(struct vm* vm, int32_t type, size_t size);
-void gc_clean(struct vm* vm);
+void* gc_alloc(struct sylk_vm* vm, int32_t type, size_t size);
+void gc_clean(struct sylk_vm* vm);
 
 #endif

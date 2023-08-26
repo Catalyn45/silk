@@ -5,7 +5,7 @@
 #include "../vm.h"
 
 struct list_context {
-    struct object* container;
+    struct sylk_object* container;
     uint32_t n_elements;
     uint32_t allocated;
 };
@@ -19,60 +19,64 @@ static void list_free(void* mem) {
     free(ctx);
 }
 
-static struct object list_constructor(struct object* self, struct vm* vm) {
+static struct sylk_object list_constructor(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
     (void)vm;
+    (void)ctx;
 
-    struct object* container = malloc(INIT_SIZE * sizeof(*container));
+    struct sylk_object* container = malloc(INIT_SIZE * sizeof(*container));
     struct list_context* context = malloc(sizeof(*context));
     *context = (struct list_context) {
         .container = container,
         .allocated = INIT_SIZE
     };
 
-    struct object_user* user = gc_alloc(vm, OBJ_USER, sizeof(*user));
-    *user = (struct object_user) {
+    struct sylk_object_user* user = gc_alloc(vm, SYLK_OBJ_NUMBER, sizeof(*user));
+    *user = (struct sylk_object_user) {
         .mem = context,
         .free_fun = list_free
     };
 
-    struct object_instance* instance = self->obj_value;
-    instance->members[0] = (struct object) {
-        .type = OBJ_USER,
+    struct sylk_object_instance* instance = self->obj_value;
+    instance->members[0] = (struct sylk_object) {
+        .type = SYLK_OBJ_NUMBER,
         .obj_value = user
     };
 
-    return (struct object){};
+    return (struct sylk_object){};
 }
 
-static struct object list_add(struct object* self, struct vm* vm) {
-    struct object_instance* instance = self->obj_value;
-    struct object_user* user = instance->members[0].obj_value;
+static struct sylk_object list_add(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
+    (void)ctx;
+
+    struct sylk_object_instance* instance = self->obj_value;
+    struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
     if (context->n_elements >= context->allocated) {
         uint32_t new_alloc_size = context->allocated * 2;
 
-        struct object* new_mem = realloc(context->container, new_alloc_size * sizeof(*context->container));
+        struct sylk_object* new_mem = realloc(context->container, new_alloc_size * sizeof(*context->container));
         context->container = new_mem;
         context->allocated = new_alloc_size;
     }
 
     context->container[context->n_elements++] = peek(0);
-    return (struct object){};
+    return (struct sylk_object){};
 }
 
-static struct object list_pop(struct object* self, struct vm* vm) {
+static struct sylk_object list_pop(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
     (void)vm;
+    (void)ctx;
 
-    struct object_instance* instance = self->obj_value;
-    struct object_user* user = instance->members[0].obj_value;
+    struct sylk_object_instance* instance = self->obj_value;
+    struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
     return context->container[--context->n_elements];
 }
 
-static void iterate_objects(struct object_instance* self, object_callback cb, void* ctx) {
-    struct object_user* user = self->members[0].obj_value;
+static void iterate_objects(struct sylk_object_instance* self, sylk_object_callback cb, void* ctx) {
+    struct sylk_object_user* user = self->members[0].obj_value;
     struct list_context* context = user->mem;
 
     for (uint32_t i = 0; i < context->n_elements; ++i) {
@@ -80,41 +84,46 @@ static void iterate_objects(struct object_instance* self, object_callback cb, vo
     }
 }
 
-static struct object list_length(struct object* self, struct vm* vm) {
+static struct sylk_object list_length(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
     (void)vm;
+    (void)ctx;
 
-    struct object_instance* instance = self->obj_value;
-    struct object_user* user = instance->members[0].obj_value;
+    struct sylk_object_instance* instance = self->obj_value;
+    struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
-    return (struct object) {.type = OBJ_NUMBER, .num_value = context->n_elements};
+    return (struct sylk_object) {.type = SYLK_OBJ_NUMBER, .num_value = context->n_elements};
 }
 
-static struct object list_set(struct object* self, struct vm* vm) {
-    struct object_instance* instance = self->obj_value;
-    struct object_user* user = instance->members[0].obj_value;
+static struct sylk_object list_set(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
+    (void)ctx;
+
+    struct sylk_object_instance* instance = self->obj_value;
+    struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
     uint32_t index = peek(0).num_value;
     context->container[index] = peek(1);
 
-    return (struct object){};
+    return (struct sylk_object){};
 }
 
-static struct object list_get(struct object* self, struct vm* vm) {
-    struct object_instance* instance = self->obj_value;
-    struct object_user* user = instance->members[0].obj_value;
+static struct sylk_object list_get(struct sylk_object* self, struct sylk_vm* vm, void* ctx) {
+    (void)ctx;
+
+    struct sylk_object_instance* instance = self->obj_value;
+    struct sylk_object_user* user = instance->members[0].obj_value;
     struct list_context* context = user->mem;
 
     uint32_t index = peek(0).num_value;
     return context->container[index];
 }
 
-int add_builtin_classes(struct named_class* classes, size_t* n_classes){
-    struct named_class list = {
+int add_builtin_classes(struct sylk_named_class* classes, size_t* n_classes){
+    struct sylk_named_class list = {
         .name = "list",
-        .cls = (struct object_class) {
-            .type = BUILT_IN,
+        .cls = (struct sylk_object_class) {
+            .type = SYLK_BUILT_IN,
             .index = 0,
             .iterate_fun = iterate_objects,
             .n_members = 1,
@@ -124,42 +133,42 @@ int add_builtin_classes(struct named_class* classes, size_t* n_classes){
                 {
                     .name = "constructor",
                     .function = {
-                        .type = BUILT_IN,
+                        .type = SYLK_BUILT_IN,
                         .function = list_constructor,
                     }
                 },
                 {
                     .name = "add",
                     .function = {
-                        .type = BUILT_IN,
+                        .type = SYLK_BUILT_IN,
                         .function = list_add,
                     }
                 },
                 {
                     .name = "pop",
                     .function = {
-                        .type = BUILT_IN,
+                        .type = SYLK_BUILT_IN,
                         .function = list_pop
                     }
                 },
                 {
                     .name = "length",
                     .function = {
-                        .type = BUILT_IN,
+                        .type = SYLK_BUILT_IN,
                         .function = list_length
                     }
                 },
                 {
                     .name = "__set",
                     .function = {
-                        .type = BUILT_IN,
+                        .type = SYLK_BUILT_IN,
                         .function = list_set
                     }
                 },
                 {
                     .name = "__get",
                     .function = {
-                        .type = BUILT_IN,
+                        .type = SYLK_BUILT_IN,
                         .function = list_get
                     }
                 }

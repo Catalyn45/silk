@@ -13,90 +13,91 @@
 #include "gc.h"
 #include "objects.h"
 #include "operations.h"
+#include "sylk_lib.h"
 
-static void push_number(struct vm* vm, int32_t number) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_NUMBER, .num_value = number};
+static void push_number(struct sylk_vm* vm, int32_t number) {
+    vm->stack[vm->stack_size++] = (struct sylk_object){.type = SYLK_OBJ_NUMBER, .num_value = number};
 }
 
-static void push_string(struct vm* vm, char* string) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_STRING, .str_value = string};
+static void push_string(struct sylk_vm* vm, char* string) {
+    vm->stack[vm->stack_size++] = (struct sylk_object){.type = SYLK_OBJ_STRING, .str_value = string};
 }
 
-static void push_bool(struct vm* vm, bool value) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_BOOL, .bool_value = value};
+static void push_bool(struct sylk_vm* vm, bool value) {
+    vm->stack[vm->stack_size++] = (struct sylk_object){.type = SYLK_OBJ_BOOL, .bool_value = value};
 }
 
-static void push_func(struct vm* vm, struct object_function* func) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_FUNCTION, .obj_value = func};
+static void push_func(struct sylk_vm* vm, struct sylk_object_function* func) {
+    vm->stack[vm->stack_size++] = (struct sylk_object){.type = SYLK_OBJ_FUNCTION, .obj_value = func};
 }
 
-static void push_class(struct vm* vm, struct object_class* cls) {
-    vm->stack[vm->stack_size++] = (struct object){.type = OBJ_CLASS, .obj_value = cls};
+static void push_class(struct sylk_vm* vm, struct sylk_object_class* cls) {
+    vm->stack[vm->stack_size++] = (struct sylk_object){.type = SYLK_OBJ_CLASS, .obj_value = cls};
 }
 
-static void push_constant(struct vm* vm, int32_t address) {
+static void push_constant(struct sylk_vm* vm, int32_t address) {
     int type = *((int32_t*)&vm->bytes[address]);
     address += sizeof(int32_t);
 
     void* value;
-    if (type == OBJ_NUMBER) {
+    if (type == SYLK_OBJ_NUMBER) {
         int32_t number = *((int32_t*)&vm->bytes[address]);
         push_number(vm, number);
         return;
     }
 
-    if (type == OBJ_STRING) {
+    if (type == SYLK_OBJ_STRING) {
         value = &vm->bytes[address];
         push_string(vm, value);
         return;
     }
 
-    if (type == OBJ_FUNCTION) {
-        struct object_function* func = (struct object_function*)&vm->bytes[address];
+    if (type == SYLK_OBJ_FUNCTION) {
+        struct sylk_object_function* func = (struct sylk_object_function*)&vm->bytes[address];
         push_func(vm, func);
         return;
     }
 
-    if (type == OBJ_CLASS) {
-        struct object_class* cls = (struct object_class*)&vm->bytes[address];
+    if (type == SYLK_OBJ_CLASS) {
+        struct sylk_object_class* cls = (struct sylk_object_class*)&vm->bytes[address];
         push_class(vm, cls);
         return;
     }
 }
 
-static int32_t pop_number(struct vm* vm) {
-    struct object obj = pop();
+static int32_t pop_number(struct sylk_vm* vm) {
+    struct sylk_object obj = pop();
     return obj.num_value;
 }
 
-static int pop_number_check(struct vm* vm, int32_t* out_number) {
-    struct object obj = pop();
-    EXPECT_OBJECT(obj.type, OBJ_NUMBER);
+static int pop_number_check(struct sylk_vm* vm, int32_t* out_number) {
+    struct sylk_object obj = pop();
+    EXPECT_OBJECT(obj.type, SYLK_OBJ_NUMBER);
 
     *out_number = obj.num_value;
     return 0;
 }
 
-static const char* pop_string(struct vm* vm) {
-    struct object obj = pop();
+static const char* pop_string(struct sylk_vm* vm) {
+    struct sylk_object obj = pop();
     return obj.str_value;
 }
 
-bool pop_bool(struct vm* vm) {
-    struct object obj = pop();
+bool pop_bool(struct sylk_vm* vm) {
+    struct sylk_object obj = pop();
     return obj.bool_value;
 }
 
-int pop_bool_check(struct vm* vm, bool* out_bool) {
-    struct object obj = pop();
-    EXPECT_OBJECT(obj.type, OBJ_BOOL);
+int pop_bool_check(struct sylk_vm* vm, bool* out_bool) {
+    struct sylk_object obj = pop();
+    EXPECT_OBJECT(obj.type, SYLK_OBJ_BOOL);
 
     *out_bool = obj.bool_value;
     return 0;
 }
 
-static void ret(struct vm* vm) {
-    struct object return_val = pop();
+static void ret(struct sylk_vm* vm) {
+    struct sylk_object return_val = pop();
 
     vm->stack_size = vm->stack_base;
     int32_t index = pop_number(vm);
@@ -112,7 +113,7 @@ static void ret(struct vm* vm) {
 #define read_value_increment(value_type) \
     (*((value_type*)(vm->bytes + vm->program_counter + 1))); vm->program_counter += sizeof(value_type)
 
-int execute(struct sylk* s, struct vm* vm){
+int execute(struct sylk* s, struct sylk_vm* vm){
     (void) s;
     vm->program_counter = vm->start_address;
 
@@ -153,13 +154,13 @@ int execute(struct sylk* s, struct vm* vm){
 
             case ADD:
                 {
-                    struct object value1 = pop();
-                    struct object value2 = pop();
+                    struct sylk_object value1 = pop();
+                    struct sylk_object value2 = pop();
 
                     operation_fun operation = addition_table[value1.type];
                     CHECK_NULL(operation, "can't add objects of type: %s and %s", rev_objects[value1.type], rev_objects[value2.type]);
 
-                    struct object result;
+                    struct sylk_object result;
                     CHECK(operation(vm, &value1, &value2, &result), "failed to add objects");
 
                     push(result);
@@ -213,13 +214,13 @@ int execute(struct sylk* s, struct vm* vm){
 
             case DEQ:
                 {
-                    struct object exp1 = pop();
-                    struct object exp2 = pop();
+                    struct sylk_object exp1 = pop();
+                    struct sylk_object exp2 = pop();
 
                     operation_fun operation = equality_table[exp1.type];
                     CHECK_NULL(operation, "equality not possible for operands of type: %s and %s", rev_objects[exp1.type], rev_objects[exp2.type]);
 
-                    struct object result;
+                    struct sylk_object result;
                     CHECK(operation(vm, &exp1, &exp2, &result), "failed to add objects");
 
                     push(result);
@@ -228,13 +229,13 @@ int execute(struct sylk* s, struct vm* vm){
 
             case NEQ:
                 {
-                    struct object exp1 = pop();
-                    struct object exp2 = pop();
+                    struct sylk_object exp1 = pop();
+                    struct sylk_object exp2 = pop();
 
                     operation_fun operation = equality_table[exp1.type];
                     CHECK_NULL(operation, "difference not possible for operands of type: %s and %s", rev_objects[exp1.type], rev_objects[exp2.type]);
 
-                    struct object result;
+                    struct sylk_object result;
                     CHECK(operation(vm, &exp1, &exp2, &result), "failed to add objects");
 
                     result.bool_value = !result.bool_value;
@@ -375,13 +376,13 @@ int execute(struct sylk* s, struct vm* vm){
 
             case CALL:
                 {
-                    struct object o = pop();
+                    struct sylk_object o = pop();
                     int32_t n_args = read_value_increment(int32_t);
 
                     call_fun call_cb = callable_table[o.type];
                     CHECK_NULL(call_cb, "object of type %s can't be called", rev_tokens[o.type]);
 
-                    CHECK(call_cb(vm, &o, n_args), "failed to call object of type: %d", o.type);
+                    CHECK(call_cb(vm, &o, n_args, s->ctx), "failed to call object of type: %d", o.type);
                 }
 
                 break;
@@ -389,7 +390,7 @@ int execute(struct sylk* s, struct vm* vm){
             case GET_FIELD:
                 {
                     const char* field_name = pop_string(vm);
-                    struct object instance = pop();
+                    struct sylk_object instance = pop();
 
                     field_fun field_cb = get_table[instance.type];
                     CHECK_NULL(field_cb, "object of type %s can't be getted", rev_tokens[instance.type]);
@@ -401,7 +402,7 @@ int execute(struct sylk* s, struct vm* vm){
             case SET_FIELD:
                 {
                     const char* field_name = pop_string(vm);
-                    struct object instance = pop();
+                    struct sylk_object instance = pop();
 
                     field_fun field_cb = set_table[instance.type];
                     CHECK_NULL(field_cb, "object of type %s can't be setted", rev_tokens[instance.type]);

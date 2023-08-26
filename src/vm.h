@@ -16,8 +16,8 @@
 #define peek(n) \
     (vm->stack[vm->stack_size - 1 - (n)])
 
-struct vm {
-    struct object stack[2048];
+struct sylk_vm {
+    struct sylk_object stack[2048];
 
     uint8_t* bytes;
     uint32_t n_bytes;
@@ -34,6 +34,6 @@ struct vm {
 };
 
 struct sylk;
-int execute(struct sylk* s, struct vm* vm);
+int execute(struct sylk* s, struct sylk_vm* vm);
 
 #endif
