@@ -61,7 +61,7 @@ class Test {
 
 Members are declared with the `var` keyword like variable declarations but the can't be initializated.
 
-The constructor is declared as a normal method but it needs to be named "constructor".
+The constructor is declared as a normal method but it needs to be named `constructor`.
 
 You can access the instance in a method with the `self` keyword.
 
