@@ -65,7 +65,7 @@ The constructor is declared as a normal method but it needs to be named "constru
 
 You can access the instance in a method with the `self` keyword.
 
-**note** first you need to declare the members and then the methods or it will not compile
+*note* first you need to declare the members and then the methods or it will not compile
 
 ## Conditionals
 The conditionals works like in any other programming language
@@ -82,13 +82,13 @@ while n > 0 {
 }
 ```
 
-**note** there is no `for` statement yet.
+*note* there is no `for` statement yet.
 
 ### Assignment
 you can assign a value to a variable with `=`
 ```
-var b;
-b = 15;
+var b
+b = 15
 ```
 
 you can also assign a different type to a variable
@@ -98,7 +98,7 @@ b = 'hello'
 print(b)
 ```
 
-**note** assignment is a statement and not an expression so you can't use assignments
+*note* assignment is a statement and not an expression so you can't use assignments
 where expressions are required.
 ```
 while n = next() {
