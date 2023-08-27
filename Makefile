@@ -1,5 +1,6 @@
 PROJNAME=sylk
 TESTNAME=$(PROJNAME)_test
+LIBNAME=lib$(PROJNAME)
 
 CC=clang
 CXX=clang++
@@ -32,30 +33,44 @@ obj/./test/%.o: test/%.cpp
 $(PROJNAME): $(OBJ) $(MAIN_OBJ)
 	@echo -e "\033[0;36mLinking $@"
 	@$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
-	@echo -e "\033[0;35mSrc done"
 
 $(TESTNAME): $(TEST_OBJ) $(OBJ)
 	@echo -e "\033[0;36mLinking $@"
 	@$(CXX) $(CFLAGS) -o $(TESTNAME) $^ $(LIBS) $(TEST_LIBS)
-	@echo -e "\033[0;35mTest done"
 
-all: $(PROJNAME) lib $(TESTNAME)
+$(LIBNAME).a: $(OBJ)
+	@echo -e "\033[0;36mLinking $@"
+	@ar rcs $@ $^
+
+$(LIBNAME).so: $(OBJ)
+	@echo -e "\033[0;36mLinking $@"
+	@$(CC) $(CFLAGS) -shared -o $@ $^ $(LIBS)
+
+binary: $(PROJNAME)
+	@echo -e "\033[0;35mBinary done"
+
+test: $(TESTNAME)
+	@echo -e "\033[0;37mTest done"
+
+lib: $(LIBNAME).so $(LIBNAME).a
+	@echo -e "\033[0;35mLib done"
+
+all: lib binary 
 	@echo -e "\033[0;37mAll done"
-
-lib: $(OBJ)
-	@echo -e "\033[0;36mLinking lib"
-	@$(CC) $(CFLAGS) -shared -o lib$(PROJNAME).so $^ $(LIBS)
-	@echo -e "\033[0;35mSrc done"
 
 clean:
 	@echo -e "\033[1;33mCleaning up"
 	@rm $(PROJNAME) -f
 	@rm $(TESTNAME) -f
+	@rm $(LIBNAME).so -f
+	@rm $(LIBNAME).a -f
 	@rm $(OBJ) -f
 	@rm $(MAIN_OBJ) -f
+	@rm $(patsubst %.o, %.d, $(MAIN_OBJ))
 	@rm $(patsubst %.o, %.d, $(OBJ))
 	@rm $(TEST_OBJ) -f
 	@rm $(patsubst %.o, %.d, $(TEST_OBJ))
 
 -include $(OBJ:.o=.d)
+-include $(MAIN_OBJ:.o=.d)
 -include $(TEST_OBJ:.o=.d)
