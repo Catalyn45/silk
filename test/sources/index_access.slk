@@ -1,0 +1,23 @@
+class Test {
+    var container
+
+    def constructor() {
+        self.container = list()
+        self.container.add(10)
+        self.container.add(20)
+        self.container.add(30)
+    }
+
+    def __get(index) {
+        return self.container[index]
+    }
+
+    def __set(index, value) {
+        self.container[index] = value
+    }
+}
+
+var t = Test()
+t[0] = 155
+print(t[0])
+

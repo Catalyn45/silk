@@ -1,0 +1,15 @@
+var l = list()
+
+l.add(10)
+l.add(20)
+l.add(30)
+
+var i = 0
+
+var sum = 0
+while i < l.length() {
+    sum = sum + l[i]
+    i = i + 1
+}
+
+print(sum)

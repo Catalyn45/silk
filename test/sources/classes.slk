@@ -1,0 +1,18 @@
+class Test {
+    var a
+    var b
+
+    def constructor(a, b) {
+        self.a = a
+        self.b = b
+    }
+
+    def add() {
+        return self.a + self.b
+    }
+}
+
+
+var t = Test(1, 2)
+print(t.add())
+

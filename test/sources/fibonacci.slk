@@ -1,0 +1,22 @@
+def fibonacci(n) {
+    var a = 0
+    var b = 1
+
+    if n == 0 {
+        return 0
+    }
+
+    while n > 1 {
+        var aux = b
+        b = a + b
+        a = aux
+
+        n = n - 1
+    }
+
+    return b
+}
+
+var n = 11
+print(fibonacci(n))
+

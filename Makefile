@@ -10,14 +10,12 @@ LIBS=
 TEST_LIBS= -lgtest -lgtest_main
 
 C=$(shell find ./src -name "*.c")
-TEST_CPP=$(shell find ./test -name "*.cpp" 2> /dev/null)
+TEST_CPP=$(shell find ./test -name "*.cpp")
+TEST_OBJ=$(patsubst %,obj/%.o,$(basename $(TEST_CPP)))
 
 ALL_OBJ=$(patsubst %,obj/%.o,$(basename $(C)))
-
 OBJ=$(filter-out obj/./src/main.o, $(ALL_OBJ))
 MAIN_OBJ = obj/./src/main.o
-
-TEST_OBJ=$(patsubst %,obj/%.o,$(basename $(TEST_CPP)))
 
 default: all
 
@@ -41,12 +39,11 @@ $(TESTNAME): $(TEST_OBJ) $(OBJ)
 	@$(CXX) $(CFLAGS) -o $(TESTNAME) $^ $(LIBS) $(TEST_LIBS)
 	@echo -e "\033[0;35mTest done"
 
-all: $(PROJNAME) # $(PROJNAME)_test
+all: $(PROJNAME) lib $(TESTNAME)
 	@echo -e "\033[0;37mAll done"
 
 lib: $(OBJ)
-	@echo -e "\033[0;36mCreating lib $@"
-	@echo -e "\033[0;36mLinking $@"
+	@echo -e "\033[0;36mLinking lib"
 	@$(CC) $(CFLAGS) -shared -o lib$(PROJNAME).so $^ $(LIBS)
 	@echo -e "\033[0;35mSrc done"
 
@@ -55,6 +52,7 @@ clean:
 	@rm $(PROJNAME) -f
 	@rm $(TESTNAME) -f
 	@rm $(OBJ) -f
+	@rm $(MAIN_OBJ) -f
 	@rm $(patsubst %.o, %.d, $(OBJ))
 	@rm $(TEST_OBJ) -f
 	@rm $(patsubst %.o, %.d, $(TEST_OBJ))

@@ -1,0 +1,8 @@
+class Test {
+    var a
+}
+
+var t = Test()
+t.a = 33
+print(t.a)
+
